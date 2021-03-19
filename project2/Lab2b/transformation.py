@@ -319,9 +319,9 @@ class Transformation(analysis.Analysis):
             # Y
             if headers.index(header) == 1:
                 return_array[0, 0] = cos_rad
-                return_array[2, 2] = cos_rad
-                return_array[2, 0] = neg_sin_rad
-                return_array[0, 2] = sin_rad
+                return_array[3, 3] = cos_rad
+                return_array[3, 0] = neg_sin_rad
+                return_array[0, 3] = sin_rad
             # Z
             if headers.index(header) == 2:
                 return_array[1, 1] = cos_rad
