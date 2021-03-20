@@ -1,4 +1,4 @@
-'''linear_regression.py
+'''linear_regression_old.py
 Subclass of Analysis that performs linear regression on data
 YOUR NAME HERE
 CS 251 Data Analysis Visualization, Spring 2020

@@ -1,5 +1,5 @@
 from data import *
-from linear_regression import *
+from linear_regression_old import *
 
 
 

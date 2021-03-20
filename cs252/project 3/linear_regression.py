@@ -1,7 +1,7 @@
-'''linear_regression_old.py
+'''linear_regression.py
 Subclass of Analysis that performs linear regression on data
 YOUR NAME HERE
-CS251 Data Analysis Visualization
+CS 252 Data Analysis Visualization
 Spring 2021
 '''
 import numpy as np
@@ -57,9 +57,9 @@ class LinearRegression(analysis.Analysis):
         # p: int. Polynomial degree of regression model (Week 2)
         self.p = 1
 
-    def linear_regression(self, ind_vars, dep_var):
+    def linear_regression(self, ind_vars, dep_var, method='scipy', p=1):
         '''Performs a linear regression on the independent (predictor) variable(s) `ind_vars`
-        and dependent variable `dep_var.
+        and dependent variable `dep_var` using the method `method`.
 
         Parameters:
         -----------
@@ -67,19 +67,113 @@ class LinearRegression(analysis.Analysis):
             Variable names must match those used in the `self.data` object.
         dep_var: str. 1 dependent variable entered into the regression.
             Variable name must match one of those used in the `self.data` object.
+        method: str. Method used to compute the linear regression. Here are the options:
+            'scipy': Use scipy's linregress function.
+            'normal': Use normal equations.
+            'qr': Use QR factorization (linear algebra section only).
 
         TODO:
         - Use your data object to select the variable columns associated with the independent and
         dependent variable strings.
-        - Perform linear regression by using Scipy to solve the least squares problem y = Ac
-        for the vector c of regression fit coefficients. Don't forget to add the coefficient column
-        for the intercept!
+        - Perform linear regression using the appropriate method.
         - Compute R^2 on the fit and the residuals.
         - By the end of this method, all instance variables should be set (see constructor).
 
         NOTE: Use other methods in this class where ever possible (do not write the same code twice!)
         '''
         pass
+
+    def linear_regression_scipy(self, A, y):
+        '''Performs a linear regression using scipy's built-in least squares solver (scipy.linalg.lstsq).
+        Solves the equation y = Ac for the coefficient vector c.
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var PLUS the intercept term
+        '''
+        pass
+
+    def linear_regression_normal(self, A, y):
+        '''Performs a linear regression using the normal equations.
+        Solves the equation y = Ac for the coefficient vector c.
+
+        See notebook for a refresher on the equation
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var AND the intercept term
+        '''
+        pass
+
+    def linear_regression_qr(self, A, y):
+        '''Performs a linear regression using the QR decomposition
+
+        (Week 2)
+
+        See notebook for a refresher on the equation
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var AND the intercept term
+
+        NOTE: You should not compute any matrix inverses! Check out scipy.linalg.solve_triangular
+        to backsubsitute to solve for the regression coefficients `c`.
+        '''
+        pass
+
+    def qr_decomposition(self, A):
+        '''Performs a QR decomposition on the matrix A. Make column vectors orthogonal relative
+        to each other. Uses the Gram–Schmidt algorithm
+
+        (Week 2)
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars+1).
+            Data matrix for independent variables.
+
+        Returns:
+        -----------
+        Q: ndarray. shape=(num_data_samps, num_ind_vars+1)
+            Orthonormal matrix (columns are orthogonal unit vectors — i.e. length = 1)
+        R: ndarray. shape=(num_ind_vars+1, num_ind_vars+1)
+            Upper triangular matrix
+
+        TODO:
+        - Q is found by the Gram–Schmidt orthogonalizing algorithm.
+        Summary: Step thru columns of A left-to-right. You are making each newly visited column
+        orthogonal to all the previous ones. You do this by projecting the current column onto each
+        of the previous ones and subtracting each projection from the current column.
+            - NOTE: Very important: Make sure that you make a COPY of your current column before
+            subtracting (otherwise you might modify data in A!).
+        Normalize each current column after orthogonalizing.
+        - R is found by equation summarized in notebook
+        '''
+        num_rows, num_cols = np.shape(A)
 
     def predict(self, X=None):
         '''Use fitted linear regression model to predict the values of data matrix self.A.
@@ -209,7 +303,7 @@ class LinearRegression(analysis.Analysis):
             x^1, x^2, ..., x^9, x^10.
 
         NOTE: There should not be a intercept term ("x^0"), the linear regression solver method
-        should take care of that.
+        will take care of that.
         '''
         pass
 
@@ -274,6 +368,6 @@ class LinearRegression(analysis.Analysis):
         p: int. Degree of polynomial regression model.
 
         TODO:
-        - Use parameters and call methods to set all instance variables defined in constructor.
+        - Use parameters and call methods to set all instance variables defined in constructor. 
         '''
         pass
