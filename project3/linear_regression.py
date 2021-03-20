@@ -33,6 +33,10 @@ class LinearRegression(analysis.Analysis):
 
         # A: ndarray. shape=(num_data_samps, num_ind_vars)
         #   Matrix for independent (predictor) variables in linear regression
+
+        #############################3333
+        # Question does a have 1's column
+        ##################################3
         self.A = None
 
         # y: ndarray. shape=(num_data_samps, 1)
@@ -57,7 +61,7 @@ class LinearRegression(analysis.Analysis):
         # p: int. Polynomial degree of regression model (Week 2)
         self.p = 1
 
-    def linear_regression(self, ind_vars, dep_var):
+    def linear_regression(self, ind_vars = None, dep_var = None, method='scipy', p=1):
         '''Performs a linear regression on the independent (predictor) variable(s) `ind_vars`
         and dependent variable `dep_var.
 
@@ -67,6 +71,7 @@ class LinearRegression(analysis.Analysis):
             Variable names must match those used in the `self.data` object.
         dep_var: str. 1 dependent variable entered into the regression.
             Variable name must match one of those used in the `self.data` object.
+        method: str. what linear regression model you want to use. default scipy
 
         TODO:
         - Use your data object to select the variable columns associated with the independent and
@@ -79,9 +84,102 @@ class LinearRegression(analysis.Analysis):
 
         NOTE: Use other methods in this class where ever possible (do not write the same code twice!)
         '''
-        pass
+        # first I am checking ind_vars and dep_vars and making sure they are entered and exist as headers
 
-    def predict(self, X=None):
+        if isinstance(ind_vars, type(None)) or isinstance(dep_var, type(None)):
+            print(f'Error: there must be atleast 1 ind_var and dep_var\nRight now they are {ind_vars} and  {dep_var}')
+            exit()
+        if len(ind_vars) < 1:
+            print(f'Error: there must be atleast 1 ind_var')
+            exit()
+
+        ind_vars_array = np.array(ind_vars)
+        headers_array = np.array(self.data.get_headers())
+
+        if dep_var not in headers_array:
+            print(f'Error: dep_var: {dep_var} needs to be in {headers_array}')
+            exit()
+        for ind_var in ind_vars_array:
+            if ind_var not in headers_array:
+                print(f'Error: ind_var: {ind_var} needs to be in {headers_array}')
+                exit()
+
+        # NOW i AM "Use your data object to select the variable columns associated with the
+        # independent and dependent variable strings."
+
+        self.ind_vars = ind_vars
+        self.dep_var = dep_var
+        self.A = self.data.select_data(self.ind_vars)
+        self.y = self.data.select_data([self.dep_var])
+
+
+        # Now I am copying how they do it in cs252 because I worked ahead on this project from
+        # the one from last year
+        # so here I am going to do the linear regeression based on the method chosen
+        if method == 'scipy':
+            c = self.linear_regression_scipy(self.A, self.y)
+            self.slope = c[1:]
+            self.intercept = float(c[0])
+
+
+
+
+
+
+    def linear_regression_scipy(self, A, y):
+        '''Performs a linear regression using scipy's built-in least squares solver (scipy.linalg.lstsq).
+        Solves the equation y = Ac for the coefficient vector c.
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var PLUS the intercept term
+        '''
+
+        A = np.hstack([np.ones([A.shape[0], 1]), A])
+        c, res, rnk, s = scipy.linalg.lstsq(A, y)
+        return c
+
+    def linear_regression_normal(self, A, y):
+        '''Performs a linear regression using the normal equations.
+        Solves the equation y = Ac for the coefficient vector c.
+
+        See notebook for a refresher on the equation
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var AND the intercept term
+        '''
+
+
+
+        A = np.hstack([np.ones([A.shape[0], 1]), A])
+
+        A_first_part = (A.T@A)
+        invA = np.linalg.inv(A_first_part)
+
+        second_part = (A.T)@(self.y)
+
+        c = invA@second_part
+
+        return c
+
+    def predict(self, X=None, method = 'vectorized'):
         '''Use fitted linear regression model to predict the values of data matrix self.A.
         Generates the predictions y_pred = mA + b, where (m, b) are the model fit slope and intercept,
         A is the data matrix.
@@ -99,6 +197,20 @@ class LinearRegression(analysis.Analysis):
 
         NOTE: You can write this method without any loops!
         '''
+
+        if isinstance(X, type(None)):
+            X = self.A
+
+        #make sure X is right size shape=(num_data_samps, num_ind_vars)
+        if X.shape != self.A.shape:
+            print(f"Error: Shape of X is {X.shape} it Must Be {self.A.shape}")
+            exit()
+
+        if method == "vectorized":
+            m = (X*np.array(self.slope))
+            c = sum(m)
+            y_pred = self.intercept + sum((X*self.slope))
+
         pass
 
     def r_squared(self, y_pred):
