@@ -7,6 +7,7 @@ Spring 2021
 import numpy as np
 import scipy.linalg
 import matplotlib.pyplot as plt
+import sys
 
 import analysis
 
@@ -61,6 +62,11 @@ class LinearRegression(analysis.Analysis):
         # p: int. Polynomial degree of regression model (Week 2)
         self.p = 1
 
+        # ind_vars: list of the string of the independant vars
+        self.ind_vars = None
+        # dep_var: string. dependant variable
+        self.dep_var = None
+
     def linear_regression(self, ind_vars = None, dep_var = None, method='scipy', p=1):
         '''Performs a linear regression on the independent (predictor) variable(s) `ind_vars`
         and dependent variable `dep_var.
@@ -88,22 +94,25 @@ class LinearRegression(analysis.Analysis):
 
         if isinstance(ind_vars, type(None)) or isinstance(dep_var, type(None)):
             print(f'Error: there must be atleast 1 ind_var and dep_var\nRight now they are {ind_vars} and  {dep_var}')
-            exit()
+            sys.exit()
         if len(ind_vars) < 1:
             print(f'Error: there must be atleast 1 ind_var')
-            exit()
+            sys.exit()
 
         ind_vars_array = np.array(ind_vars)
         headers_array = np.array(self.data.get_headers())
 
         if dep_var not in headers_array:
             print(f'Error: dep_var: {dep_var} needs to be in {headers_array}')
-            exit()
+            sys.exit()
         for ind_var in ind_vars_array:
             if ind_var not in headers_array:
                 print(f'Error: ind_var: {ind_var} needs to be in {headers_array}')
-                exit()
+                sys.exit()
 
+        # Set the variables list
+        self.ind_vars = ind_vars
+        self.dep_var = dep_var
         # NOW i AM "Use your data object to select the variable columns associated with the
         # independent and dependent variable strings."
 
@@ -121,7 +130,10 @@ class LinearRegression(analysis.Analysis):
             self.slope = c[1:]
             self.intercept = float(c[0])
 
-
+        y_pred = self.predict()
+        self.residuals = self.compute_residuals(y_pred)
+        self.R2 = self.r_squared(y_pred)
+        self.m_sse = self.mean_sse()
 
 
 
@@ -202,16 +214,17 @@ class LinearRegression(analysis.Analysis):
             X = self.A
 
         #make sure X is right size shape=(num_data_samps, num_ind_vars)
-        if X.shape != self.A.shape:
-            print(f"Error: Shape of X is {X.shape} it Must Be {self.A.shape}")
-            exit()
+        #question does order matter
+        if X.shape[0] != self.A.shape[1]:
+            if X.shape[0] != self.A.shape[0]:
+                print(f"Error: X Has Shape {X.shape} it Needs {self.A.shape[1]} Independant Variables")
+                sys.exit()
+
 
         if method == "vectorized":
-            m = (X*np.array(self.slope))
-            c = sum(m)
-            y_pred = self.intercept + sum((X*self.slope))
 
-        pass
+            y_pred = np.array(self.intercept + np.sum((X*np.array(self.slope).T),1))[:,np.newaxis]
+            return y_pred
 
     def r_squared(self, y_pred):
         '''Computes the R^2 quality of fit statistic
@@ -226,9 +239,15 @@ class LinearRegression(analysis.Analysis):
         R2: float.
             The R^2 statistic
         '''
-        pass
+        y_mean = np.mean(self.y)
+        r2_bottom = np.sum((self.y - y_mean) ** 2)
+        r2_top = np.sum((self.compute_residuals(y_pred))**2)
+        R2 = 1 - (r2_top/r2_bottom)
+        return R2
 
     def compute_residuals(self, y_pred):
+
+        #why not make self. here
         '''Determines the residual values from the linear regression model
 
         Parameters:
@@ -242,7 +261,10 @@ class LinearRegression(analysis.Analysis):
             Difference between the y values and the ones predicted by the regression model at the
             data samples
         '''
-        pass
+        residuals = self.y - y_pred
+        return residuals
+
+
 
     def mean_sse(self):
         '''Computes the mean sum-of-squares error in the predicted y compared the actual y values.
@@ -254,9 +276,10 @@ class LinearRegression(analysis.Analysis):
 
         Hint: Make use of self.compute_residuals
         '''
-        pass
+        m_sse = (np.sum((self.residuals)**2))/(len(self.residuals))
+        return m_sse
 
-    def scatter(self, ind_var, dep_var, title):
+    def scatter(self, ind_var, dep_var, title = None):
         '''Creates a scatter plot with a regression line to visualize the model fit.
         Assumes linear regression has been already run.
 
@@ -275,7 +298,17 @@ class LinearRegression(analysis.Analysis):
         - Plot the line on top of the scatterplot.
         - Make sure that your plot has a title (with R^2 value in it)
         '''
-        pass
+        if isinstance(title, type(None)):
+            title = f'R^2 : {self.R2}'
+        else:
+            title = f'{title}\nR^2 : {self.R2}'
+
+        x_cords, y_cords = analysis.Analysis.scatter(self, ind_var=ind_var, dep_var=dep_var, title=title)
+        x_linreg_plot_cords = np.linspace(np.min(x_cords),np.max(x_cords))
+        y_linereg_plot_cords = self.intercept + self.slope(self.ind_vars.index(ind_var))
+
+        plt.plot(x_linreg_plot_cords, y_linereg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+        plt.legend(bbox_to_anchor=(1.26, 0.1), loc='upper right')
 
     def pair_plot(self, data_vars, fig_sz=(12, 12), hists_on_diag=True):
         '''Makes a pair plot with regression lines in each panel.
