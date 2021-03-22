@@ -67,7 +67,7 @@ class LinearRegression(analysis.Analysis):
         # dep_var: string. dependant variable
         self.dep_var = None
 
-    def linear_regression(self, ind_vars = None, dep_var = None, method='scipy', p=1):
+    def linear_regression(self, ind_vars = None, dep_var = None, method='scipy', p=1, slope = None, intercept = None):
         '''Performs a linear regression on the independent (predictor) variable(s) `ind_vars`
         and dependent variable `dep_var.
 
@@ -82,6 +82,16 @@ class LinearRegression(analysis.Analysis):
              Example: if p=10, then the model should have terms in your regression model for
              x^1, x^2, ..., x^9, x^10, and a column of homogeneous coordinates (1s).
              !!!! FOR SINGLE IND_VAR ONLY!!!!!
+
+        slope: ndarray. shape=(num_ind_vars, 1)
+            Slope coefficients for the linear regression fits for each independent var
+            Initilized at None and only sets the slope to skip the regression if set
+            (ie without regression for fitting)
+        intercept: float.
+            Intercept for the linear regression fit
+            Initilized at None and only sets the slope to skip the regression if set
+            (ie without regression for fitting)
+        !! both slope and intercept need to be set for it to fit and not run a regression
 
         TODO:
         - Use your data object to select the variable columns associated with the independent and
@@ -134,18 +144,31 @@ class LinearRegression(analysis.Analysis):
         self.y = self.data.select_data([self.dep_var])
         self.p = p
 
+        if not isinstance(slope, type(None)) and  not isinstance(intercept, type(None)):
+            #check for errors when fitting with input sizes
+            if p == 1 and len(slope) != len(ind_vars):
+                print(f'ERROR: there must be {len(ind_vars)} slopes\n'
+                      f'Currently there are {len(slope)} slopes')
+                exit()
+            if p > 1 and len(slope) != p:
+                print(f'ERROR: there must be {len(ind_vars)} slopes\n'
+                      f'Currently there are {len(slope)} slopes')
+                exit()
 
-        # Now I am copying how they do it in cs252 because I worked ahead on this project from
-        # the one from last year
-        # so here I am going to do the linear regeression based on the method chosen
-        if method == 'scipy':
-            if p == 1:
-                c = self.linear_regression_scipy(self.A, self.y)
-            elif p >1:
-                poly_mat = self.make_polynomial_matrix(self.A,self.p)
-                c = self.linear_regression_scipy(poly_mat, self.y)
-            self.slope = c[1:]
-            self.intercept = float(c[0])
+            self.slope = slope
+            self.intercept = intercept
+        else:
+            # Now I am copying how they do it in cs252 because I worked ahead on this project from
+            # the one from last year
+            # so here I am going to do the linear regeression based on the method chosen
+            if method == 'scipy':
+                if p == 1:
+                    c = self.linear_regression_scipy(self.A, self.y)
+                elif p >1:
+                    poly_mat = self.make_polynomial_matrix(self.A,self.p)
+                    c = self.linear_regression_scipy(poly_mat, self.y)
+                self.slope = c[1:]
+                self.intercept = float(c[0])
 
         y_pred = self.predict()
         self.residuals = self.compute_residuals(y_pred)
@@ -328,12 +351,17 @@ class LinearRegression(analysis.Analysis):
         x_linreg_plot_cords = np.linspace(np.min(x_cords),np.max(x_cords))
         if self.p == 1:
             y_linreg_plot_cords = self.intercept + self.slope[self.ind_vars.index(ind_var)]*x_linreg_plot_cords
+            plt.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line (p={self.p})', c='r', alpha=0.5)
         elif self.p > 1:
             x_linreg_A = x_linreg_plot_cords[:,np.newaxis]
             x_linreg_A = self.make_polynomial_matrix(x_linreg_A,self.p)
             y_linreg_plot_cords =np.array(self.intercept + np.sum((x_linreg_A*np.array(self.slope).T),1))[:,np.newaxis]
-        plt.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+            plt.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'poly reg line (p={self.p})', c='r',
+                    alpha=0.5)
+
         plt.legend(bbox_to_anchor=(1.26, 0.1), loc='upper right')
+
+
 
     # helper function for pair_plot to create linear regressions
     def pair_plot_linear_regs(self, ndenumerate_obj, diag = 'scatter'):
@@ -352,16 +380,22 @@ class LinearRegression(analysis.Analysis):
         y_linreg_plot_cords = self.intercept + self.slope[0] * x_linreg_plot_cords
 
         if diag == 'scatter':
-            ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+            if self.p == 1:
+                ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line (p={self.p})', c='r', alpha=0.5)
+            if self.p > 1:
+                ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'poly reg line (p={self.p})', c='r', alpha=0.5)
             ax.set_title(f'R^2 : {self.R2:.8F}')
         elif diag == 'hist':
             if independant_var != dependant_var:
-                ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+                if self.p == 1:
+                    ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line (p={self.p})', c='r',
+                            alpha=0.5)
+                if self.p > 1:
+                    ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'poly reg line (p={self.p})', c='r',
+                            alpha=0.5)
                 ax.set_title(f'R^2 : {self.R2:.8F}')
 
         return ax
-
-
 
 
 
@@ -471,7 +505,7 @@ class LinearRegression(analysis.Analysis):
         -----------
         ndarray. shape=(num_ind_vars, 1). The fitted regression slope(s).
         '''
-        pass
+        return  self.slope
 
     def get_fitted_intercept(self):
         '''Returns the fitted regression intercept.
@@ -481,7 +515,7 @@ class LinearRegression(analysis.Analysis):
         -----------
         float. The fitted regression intercept(s).
         '''
-        pass
+        return  self.intercept
 
     def initialize(self, ind_vars, dep_var, slope, intercept, p):
         '''Sets fields based on parameter values.
@@ -489,8 +523,9 @@ class LinearRegression(analysis.Analysis):
 
         Parameters:
         -----------
-        ind_var: str. Independent variable entered in the single regression.
+        ind_var: list or str. Independent variable entered in the single regression.
             Variable names must match those used in the `self.data` object.
+            If multiple ind_vars it is a list
         dep_var: str. Dependent variable entered into the regression.
             Variable name must match one of those used in the `self.data` object.
         slope: ndarray. shape=(num_ind_vars, 1)
@@ -502,4 +537,11 @@ class LinearRegression(analysis.Analysis):
         TODO:
         - Use parameters and call methods to set all instance variables defined in constructor.
         '''
-        pass
+        # This function is going to call linear regression
+        # here I am seeing if just one ind_var is used and if it is I am putting it into a list
+        if isinstance(ind_vars, type(str)):
+            ind_vars = [ind_vars]
+
+        #fit the data
+        self.linear_regression(ind_vars=ind_vars,dep_var=dep_var,
+                               p = p, slope=slope,intercept=intercept)
