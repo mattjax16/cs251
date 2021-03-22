@@ -78,6 +78,10 @@ class LinearRegression(analysis.Analysis):
         dep_var: str. 1 dependent variable entered into the regression.
             Variable name must match one of those used in the `self.data` object.
         method: str. what linear regression model you want to use. default scipy
+         p: int. Degree of polynomial regression model.
+             Example: if p=10, then the model should have terms in your regression model for
+             x^1, x^2, ..., x^9, x^10, and a column of homogeneous coordinates (1s).
+             !!!! FOR SINGLE IND_VAR ONLY!!!!!
 
         TODO:
         - Use your data object to select the variable columns associated with the independent and
@@ -110,6 +114,14 @@ class LinearRegression(analysis.Analysis):
                 print(f'Error: ind_var: {ind_var} needs to be in {headers_array}')
                 sys.exit()
 
+        #make sure ther is only one independant variable if p is greater than 1
+        if p > 1 and len(ind_vars) > 1:
+            print(f'ERROR: Can only have one ind_var if p is greater than 1\n'
+                  f'Currently there are {len(ind_vars)} ind_vars')
+
+
+
+
         # Set the variables list
         self.ind_vars = ind_vars
         self.dep_var = dep_var
@@ -120,13 +132,18 @@ class LinearRegression(analysis.Analysis):
         self.dep_var = dep_var
         self.A = self.data.select_data(self.ind_vars)
         self.y = self.data.select_data([self.dep_var])
+        self.p = p
 
 
         # Now I am copying how they do it in cs252 because I worked ahead on this project from
         # the one from last year
         # so here I am going to do the linear regeression based on the method chosen
         if method == 'scipy':
-            c = self.linear_regression_scipy(self.A, self.y)
+            if p == 1:
+                c = self.linear_regression_scipy(self.A, self.y)
+            elif p >1:
+                poly_mat = self.make_polynomial_matrix(self.A,self.p)
+                c = self.linear_regression_scipy(poly_mat, self.y)
             self.slope = c[1:]
             self.intercept = float(c[0])
 
@@ -210,8 +227,10 @@ class LinearRegression(analysis.Analysis):
         NOTE: You can write this method without any loops!
         '''
 
+
         if isinstance(X, type(None)):
             X = self.A
+
 
         #make sure X is right size shape=(num_data_samps, num_ind_vars)
         #question does order matter
@@ -219,6 +238,8 @@ class LinearRegression(analysis.Analysis):
             if X.shape[0] != self.A.shape[0]:
                 print(f"Error: X Has Shape {X.shape} it Needs {self.A.shape[1]} Independant Variables")
                 sys.exit()
+        if self.p > 1:
+            X = self.make_polynomial_matrix(X,self.p)
 
 
         if method == "vectorized":
@@ -299,16 +320,51 @@ class LinearRegression(analysis.Analysis):
         - Make sure that your plot has a title (with R^2 value in it)
         '''
         if isinstance(title, type(None)):
-            title = f'R^2 : {self.R2}'
+            title = f'R^2 : {self.R2:.8F}'
         else:
-            title = f'{title}\nR^2 : {self.R2}'
+            title = f'{title}\nR^2 : {self.R2:.8F}'
 
         x_cords, y_cords = analysis.Analysis.scatter(self, ind_var=ind_var, dep_var=dep_var, title=title)
         x_linreg_plot_cords = np.linspace(np.min(x_cords),np.max(x_cords))
-        y_linereg_plot_cords = self.intercept + self.slope(self.ind_vars.index(ind_var))
-
-        plt.plot(x_linreg_plot_cords, y_linereg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+        if self.p == 1:
+            y_linreg_plot_cords = self.intercept + self.slope[self.ind_vars.index(ind_var)]*x_linreg_plot_cords
+        elif self.p > 1:
+            x_linreg_A = x_linreg_plot_cords[:,np.newaxis]
+            x_linreg_A = self.make_polynomial_matrix(x_linreg_A,self.p)
+            y_linreg_plot_cords =np.array(self.intercept + np.sum((x_linreg_A*np.array(self.slope).T),1))[:,np.newaxis]
+        plt.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
         plt.legend(bbox_to_anchor=(1.26, 0.1), loc='upper right')
+
+    # helper function for pair_plot to create linear regressions
+    def pair_plot_linear_regs(self, ndenumerate_obj, diag = 'scatter'):
+
+        ax = ndenumerate_obj[1]
+        dependant_var = ndenumerate_obj[0][0]
+        independant_var = ndenumerate_obj[0][1]
+        headers = self.data.get_headers()
+        x = headers[independant_var]
+        y = headers[dependant_var]
+        self.linear_regression(ind_vars=[y], dep_var=x)
+
+        x_cords = self.data.select_data([x])
+
+        x_linreg_plot_cords = np.linspace(np.min(x_cords), np.max(x_cords))
+        y_linreg_plot_cords = self.intercept + self.slope[0] * x_linreg_plot_cords
+
+        if diag == 'scatter':
+            ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+            ax.set_title(f'R^2 : {self.R2:.8F}')
+        elif diag == 'hist':
+            if independant_var != dependant_var:
+                ax.plot(x_linreg_plot_cords, y_linreg_plot_cords, label=f'linear reg line', c='r', alpha=0.5)
+                ax.set_title(f'R^2 : {self.R2:.8F}')
+
+        return ax
+
+
+
+
+
 
     def pair_plot(self, data_vars, fig_sz=(12, 12), hists_on_diag=True):
         '''Makes a pair plot with regression lines in each panel.
@@ -332,7 +388,24 @@ class LinearRegression(analysis.Analysis):
         every ind and dep variable pair.
         - Make sure that each plot has a title (with R^2 value in it)
         '''
-        pass
+
+        if hists_on_diag == True:
+            fig, axes = analysis.Analysis.pair_plot(self, data_vars=data_vars, fig_sz=fig_sz, title='', diag='hist')
+            # here I am mappinng the regression lines onto all the scatter plots in the pair plot
+            # with the function I made pair_plot_linear_regs()
+            axes_list = np.array(list((map(lambda ax: self.pair_plot_linear_regs(ax, diag='hist'),
+                                           np.ndenumerate(axes)))))
+        else:
+            fig, axes = analysis.Analysis.pair_plot(self, data_vars=data_vars, fig_sz=fig_sz, title='', diag='scatter')
+            # here I am mappinng the regression lines onto all the scatter plots in the pair plot
+            # with the function I made pair_plot_linear_regs()
+            axes_list = np.array(list((map(lambda ax: self.pair_plot_linear_regs(ax),
+                                           np.ndenumerate(axes)))))
+
+        axes_array = axes_list
+        axes = axes_array.reshape(len(data_vars), len(data_vars))
+
+        return
 
     def make_polynomial_matrix(self, A, p):
         '''Takes an independent variable data column vector `A and transforms it into a matrix appropriate
@@ -356,7 +429,14 @@ class LinearRegression(analysis.Analysis):
         NOTE: There should not be a intercept term ("x^0"), the linear regression solver method
         should take care of that.
         '''
-        pass
+        #check that A is right shape
+        if A.shape[1] != 1:
+            print(f"ERROR: A needs one independent variable only\nCurrently it has {A.shape[1]} ")
+        # if A.shape[1] != 1:
+        #     print(f"ERROR: A needs {self.residuals.shape[0]} Samples\nCurrently it has {A.shape[1]} ")
+
+        poly_mat = np.power(A*(np.ones((A.shape[0],p))),(1+np.arange(p)))
+        return (poly_mat)
 
     def poly_regression(self, ind_var, dep_var, p):
         '''Perform polynomial regression — generalizes self.linear_regression to polynomial curves
@@ -380,6 +460,7 @@ class LinearRegression(analysis.Analysis):
             appropriate for polynomial regresssion. Do this with self.make_polynomial_matrix.
             - You set the instance variable for the polynomial regression degree (self.p)
         '''
+        # I just added this to linear regression
         pass
 
     def get_fitted_slope(self):

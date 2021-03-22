@@ -7,10 +7,10 @@ import numpy as np
 import scipy.linalg
 import matplotlib.pyplot as plt
 
-import analysis
+import analysis_old
 
 
-class LinearRegression(analysis.Analysis):
+class LinearRegression(analysis_old.Analysis):
     '''
     Perform and store linear regression and related analyses
     '''
@@ -572,7 +572,7 @@ class LinearRegression(analysis.Analysis):
         else:
             title = f'{title}\nR^2 : {self.R2}'
 
-        x_cords, y_cords = analysis.Analysis.scatter(self, ind_var=ind_var,dep_var=dep_var, title=title)
+        x_cords, y_cords = analysis_old.Analysis.scatter(self, ind_var=ind_var, dep_var=dep_var, title=title)
 
         # - Use your regression slope, intercept, and
         # x sample points to solve for the y values on the regression line.
@@ -639,8 +639,10 @@ class LinearRegression(analysis.Analysis):
         else:
             title = f'{title}\nR^2 : {self.R2}'
 
-        fig, axes = analysis.Analysis.pair_plot(self, data_vars = data_vars, fig_sz=fig_sz, title=title)
+        fig, axes = analysis_old.Analysis.pair_plot(self, data_vars = data_vars, fig_sz=fig_sz, title=title)
 
+        # here I am mappinng the regression lines onto all the scatter plots in the pair plot
+        # with the function I made pair_plot_linear_regs()
         axes_list = np.array(list((map(lambda ax: self.pair_plot_linear_regs(ax),
                                         np.ndenumerate(axes)))))
         axes_array = axes_list

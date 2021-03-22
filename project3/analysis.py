@@ -1,4 +1,4 @@
-'''analysis.py
+'''analysis_old.py
 Run statistical analyses and plot Numpy ndarray data
 MATT BASS
 CS 251 Data Analysis Visualization, Spring 2021
@@ -631,11 +631,6 @@ class Analysis:
                 fig.subplots_adjust(top=0.92, bottom=0.08)
                 return [ax,fig]
         else:
-            # if dependant_var != independant_var:
-            #     ax.scatter(self.data.data[:, independant_var], self.data.data[:, dependant_var])
-            # else:
-            #     ax.hist(self.data.data[:, dependant_var])
-            # add labels only on outer edges
 
             ax.scatter(self.data.select_data([headers[independant_var]]), self.data.select_data([headers[dependant_var]]))
 
@@ -656,7 +651,7 @@ class Analysis:
 
             #add diagnoals:
             if independant_var == dependant_var and diag != 'scatter':
-                ax.cla()
+                ax.clear()
                 if diag == 'hist':
                     ax.hist(self.data.select_data([headers[independant_var]]), edgecolor='black')
 

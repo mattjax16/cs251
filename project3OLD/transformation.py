@@ -7,11 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import palettable
 from palettable import cartocolors
-import analysis
+import analysis_old
 from data import *
 
 
-class Transformation(analysis.Analysis):
+class Transformation(analysis_old.Analysis):
 
     def __init__(self, orig_dataset, data=None):
         '''Constructor for a Transformation object
