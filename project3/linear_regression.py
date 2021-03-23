@@ -77,7 +77,10 @@ class LinearRegression(analysis.Analysis):
             Variable names must match those used in the `self.data` object.
         dep_var: str. 1 dependent variable entered into the regression.
             Variable name must match one of those used in the `self.data` object.
-        method: str. what linear regression model you want to use. default scipy
+        method: str. Method used to compute the linear regression. Here are the options:
+            'scipy': Use scipy's linregress function. (DEFAULT)
+            'normal': Use normal equations.
+            'qr': Use QR factorization (linear algebra section only).
          p: int. Degree of polynomial regression model.
              Example: if p=10, then the model should have terms in your regression model for
              x^1, x^2, ..., x^9, x^10, and a column of homogeneous coordinates (1s).
@@ -167,6 +170,14 @@ class LinearRegression(analysis.Analysis):
                 elif p >1:
                     poly_mat = self.make_polynomial_matrix(self.A,self.p)
                     c = self.linear_regression_scipy(poly_mat, self.y)
+                self.slope = c[1:]
+                self.intercept = float(c[0])
+            if method == 'normal':
+                if p == 1:
+                    c = self.linear_regression_normal(self.A, self.y)
+                elif p >1:
+                    poly_mat = self.make_polynomial_matrix(self.A,self.p)
+                    c = self.linear_regression_normal(poly_mat, self.y)
                 self.slope = c[1:]
                 self.intercept = float(c[0])
 

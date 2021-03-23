@@ -112,27 +112,42 @@ np.set_printoptions(suppress=True, precision=5)
 # print(f'MSSE: {poly_lin_reg.m_sse}')
 
 
-poly_filename = 'data/poly_data.csv'
-fit_set = Data(poly_filename)
-fit_set.limit_samples(0,50)
-validation_set = Data(poly_filename)
-validation_set.limit_samples(50,100)
-print(fit_set)
-print(validation_set)
+# poly_filename = 'data/poly_data.csv'
+# fit_set = Data(poly_filename)
+# fit_set.limit_samples(0,50)
+# validation_set = Data(poly_filename)
+# validation_set.limit_samples(50,100)
 # print(fit_set)
 # print(validation_set)
-poly_lin_reg_fit = linear_regression.LinearRegression(fit_set)
-poly_lin_reg_fit.linear_regression(['X'], 'Y', p = 7)
+# # print(fit_set)
+# # print(validation_set)
+# poly_lin_reg_fit = linear_regression.LinearRegression(fit_set)
+# poly_lin_reg_fit.linear_regression(['X'], 'Y', p = 7)
+#
+# poly_lin_reg_fit.scatter('X','Y', title = f'Fit Data\nMSSE : {poly_lin_reg_fit.m_sse:.8f}')
+# poly_lin_reg_fit.show()
+#
+#
+#
+# poly_lin_reg_val = linear_regression.LinearRegression(validation_set)
+# fit_slopes =  poly_lin_reg_fit.get_fitted_slope()
+# fit_intercept= poly_lin_reg_fit.get_fitted_intercept()
+# poly_lin_reg_val.initialize(['X'], 'Y', p = 7, slope = fit_slopes,
+#                        intercept = fit_intercept)
+# poly_lin_reg_val.scatter('X','Y', title = f'Validation Data\nMSSE : {poly_lin_reg_val.m_sse:.8f}')
+# poly_lin_reg_val.show()
 
-poly_lin_reg_fit.scatter('X','Y', title = f'Fit Data\nMSSE : {poly_lin_reg_fit.m_sse:.8f}')
-poly_lin_reg_fit.show()
+iris_filename = 'data/iris.csv'
+iris_data = Data(iris_filename)
+print(iris_data)
+lin_reg = linear_regression.LinearRegression(iris_data)
 
+np.random.seed(0)
+# test data: 10 data samples, 4 dimensional.
+test_A = np.random.normal(size=(10, 4))
+test_y = np.random.normal(size=(10, 1))
+test_c = lin_reg.linear_regression_scipy(test_A, test_y)
+print(f'Your regression fit coefficients are\n{np.squeeze(test_c)} and should be\n[ 0.10874  0.58024  0.05166 -0.34    -0.54393] OR\n[-0.54393  0.10874  0.58024  0.05166 -0.34   ]\n(depending on your preferred placement of the intercept)\n')
+print(f'Your regression fit coefficient column vector shape is\n{test_c.shape} and should be\n(5, 1)')
 
-
-poly_lin_reg_val = linear_regression.LinearRegression(validation_set)
-fit_slopes =  poly_lin_reg_fit.get_fitted_slope()
-fit_intercept= poly_lin_reg_fit.get_fitted_intercept()
-poly_lin_reg_val.initialize(['X'], 'Y', p = 7, slope = fit_slopes,
-                       intercept = fit_intercept)
-poly_lin_reg_val.scatter('X','Y', title = f'Validation Data\nMSSE : {poly_lin_reg_val.m_sse:.8f}')
-poly_lin_reg_val.show()
+print(1)
