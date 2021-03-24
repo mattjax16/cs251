@@ -577,8 +577,7 @@ class Analysis:
 
 
 
-                    label1 = ax.scatter(self.data.select_data(headers = [headers[independant_var]], rows = cat_rows_list),
-                           self.data.select_data(headers = [headers[dependant_var]],rows = cat_rows_list), label = f"{label} : {len(cat_rows_list)} samps")
+                    label1 = ax.scatter(self.data.select_data(headers = [headers[independant_var]], rows = cat_rows_list),self.data.select_data(headers = [headers[dependant_var]],rows = cat_rows_list), label = f"{label} : {len(cat_rows_list)} samps")
 
                     labels_list.append(label1)
 
@@ -652,7 +651,7 @@ class Analysis:
                 #     print(yticks)
                 #     ax.set_xticks(yticks)
 
-                fig.legend(handles=labels_list, loc='upper center', ncol=3)
+                fig.legend(handles=labels_list, loc='upper right', ncol=3)
                 fig.subplots_adjust(top=0.92, bottom=0.08)
                 return [ax,fig]
         else:
@@ -744,6 +743,7 @@ class Analysis:
             axs_list = np.array(list((map(lambda ax: self.createPairPlots(ax, last_row = (axs.shape[0]-1), cat = cat, diag = diag, headers = data_vars, fig = fig), np.ndenumerate(axs)))))
             axs_array = axs_list[:,0]
             axs = axs_array.reshape(len(data_vars),len(data_vars))
+            fig.suptitle(title)
 
 
 
