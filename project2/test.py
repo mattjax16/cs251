@@ -15,19 +15,31 @@ brewer_colors = cartocolors.qualitative.Safe_4.mpl_colormap
 import requests
 data_url = 'https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/WaffleDivorce.csv'
 data_request = requests.get('https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/WaffleDivorce.csv')
-
-# with open('')
+print(data_request.text)
 
 data_string_list = data_request.text.splitlines()
 data_string_list.insert(1,'string;string;numeric;numeric;numeric;numeric;'
                         'numeric;numeric;numeric;numeric;numeric;numeric;numeric')
+
 data_parsed = [line.split(';') for line in data_string_list]
 
-print(data_parsed)
+with open('WH_divorce.csv','w') as WH_divorce_csv:
+    csv_writer = csv.writer(WH_divorce_csv, delimiter = ',')
+    csv_writer.writerows(data_parsed)
 
 
-states_list = data_parsed[2:][0]
+states_list = []
+for line in data_parsed[2:]:
+    states_list.append(line[0])
 print(states_list)
+
+
+wh_data = Data('WH_divorce.csv')
+Allwh_data = AllData('WH_divorce.csv')
+Allwh_transform = transformation.Transformation(Allwh_data)
+print(Allwh_data.get_headers())
+Allwh_transform.pair_plot(Allwh_data.get_headers()[:7],title = 'Waffle House Present Data',
+                         cat = Allwh_data.get_headers()[7], diag = 'hist')
 #
 # #showing the use of a size and color scatter plot with the use of mpg data
 # plt.rcParams.update({'font.size': 20, 'figure.figsize': (12, 12)})

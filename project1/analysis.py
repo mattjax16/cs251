@@ -1,4 +1,4 @@
-'''analysis.py
+'''analysis_old.py
 Run statistical analyses and plot Numpy ndarray data
 MATT BASS
 CS 251 Data Analysis Visualization, Spring 2021

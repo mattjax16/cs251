@@ -1,4 +1,4 @@
-'''analysis.py
+'''analysis_old.py
 Run statistical analyses and plot Numpy ndarray data
 MATT BASS
 CS 251 Data Analysis Visualization, Spring 2021
@@ -299,13 +299,6 @@ class Analysis:
                             else:
                                 plt.title(title)
 
-                            # x = var_array[:, 0]
-                            # y = var_array[:, 1]
-                            # plt.scatter(x, y)
-                            # plt.xlabel(ind_var)
-                            # plt.ylabel(dep_var)
-                            # plt.title(title)
-                            # return x, y
 
                 else:
                     var_array = self.data.select_data([ind_var, dep_var])
@@ -322,14 +315,13 @@ class Analysis:
 
 
 
-    #helpur function to get bottom kwd arg for matplotlib graphs
+    #helper function to get bottom kwd arg for matplotlib graphs
     def getBottom(self, labelList):
 
         if len(labelList) == 0:
             return None
         elif len(labelList) == 1:
             label_array = np.array(labelList).squeeze(axis=0)
-            #return_array = np.expand_dims(label_array[0,:,0], axis = 1)
             return label_array
         elif len(labelList) > 1:
             label_array = np.array(labelList)
@@ -400,23 +392,6 @@ class Analysis:
                                 plt.hist(cat_var_array,color=color, label=label, bottom=bottom_arg_val,  histtype='barstacked')
 
                                 addedLabels.append(cat_var_array)
-
-
-                            # plt.legend(loc='upper right')
-                            # plt.xlabel(f'{ind_var}')
-                            # plt.ylabel(f'{dep_var}')
-                            # if title == None:
-                            #     plt.title(f'{ind_var} vs. {dep_var}')
-                            # else:
-                            #     plt.title(title)
-
-                            # x = var_array[:, 0]
-                            # y = var_array[:, 1]
-                            # plt.scatter(x, y)
-                            # plt.xlabel(ind_var)
-                            # plt.ylabel(dep_var)
-                            # plt.title(title)
-                            # return x, y
 
                 else:
                    return
@@ -656,11 +631,6 @@ class Analysis:
                 fig.subplots_adjust(top=0.92, bottom=0.08)
                 return [ax,fig]
         else:
-            # if dependant_var != independant_var:
-            #     ax.scatter(self.data.data[:, independant_var], self.data.data[:, dependant_var])
-            # else:
-            #     ax.hist(self.data.data[:, dependant_var])
-            # add labels only on outer edges
 
             ax.scatter(self.data.select_data([headers[independant_var]]), self.data.select_data([headers[dependant_var]]))
 
@@ -681,7 +651,7 @@ class Analysis:
 
             #add diagnoals:
             if independant_var == dependant_var and diag != 'scatter':
-                ax.cla()
+                ax.clear()
                 if diag == 'hist':
                     ax.hist(self.data.select_data([headers[independant_var]]), edgecolor='black')
 
