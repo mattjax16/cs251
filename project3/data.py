@@ -45,12 +45,10 @@ class Data:
 
         '''
         data: ndarray or None. shape=(N, M).
-            N is the number of data samples (rows) in the dataset and M is the number of variables
-            (cols) in the dataset.
-            2D numpy array of the dataset’s values, all formatted as floats.
-            NOTE: In Week 1, don't worry working with ndarrays yet. Assume it will be passed in
-                  as None for now.
-        '''
+        N is the number of data samples (rows) in the dataset and M is the number of variables
+        (cols) in the dataset.
+        2D numpy array of the dataset’s values, all formatted as floats.'''
+
         try:
             if data == None:
                 self.data = []
@@ -212,17 +210,13 @@ class Data:
                             and set header2col
                         '''
                         if line_number == 0:
-                            if(self.arrayHasAllStrings(line)):
 
-                                data_index = 0
-                                for colNum , header in enumerate(line):
-                                    if colNum in data_indexes:
-                                        self.headers.append(header)
-                                        self.header2col[header] = data_index
-                                        data_index += 1
-                            else:
-                                print("ERROR: Data Needs Headers")
-                                return None
+                            data_index = 0
+                            for colNum , header in enumerate(line):
+                                if colNum in data_indexes:
+                                    self.headers.append(header)
+                                    self.header2col[header] = data_index
+                                    data_index += 1
 
 
                         ''' This block of code gets the data types for each headers'''
@@ -332,7 +326,7 @@ class Data:
         -----------
         Python list of str.
         '''
-        return self.headers
+        return list(self.headers)
 
     def get_mappings(self):
         '''Get method for mapping between variable name and column index
@@ -341,7 +335,7 @@ class Data:
         -----------
         Python dictionary. str -> int
         '''
-        return self.header2col
+        return dict(self.header2col)
 
     def get_num_dims(self):
         '''Get method for number of dimensions in each data sample

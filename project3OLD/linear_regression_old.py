@@ -431,6 +431,9 @@ class LinearRegression(analysis_old.Analysis):
         Normalize each current column after orthogonalizing.
         - R is found by equation summarized in notebook
         '''
+
+
+
         pass
 
     def predict(self, slope, intercept, X=None):

@@ -40,9 +40,13 @@ class LinearRegression(analysis.Analysis):
         ##################################3
         self.A = None
 
-        # y: ndarray. shape=(num_data_samps, 1)
+        # predicted_y: ndarray. shape=(num_data_samps, 1)
         #   Vector for dependent variable predictions from linear regression
-        self.y = None
+        self.predicted_y = None
+
+        # acutual_y: ndarray. shape=(num_data_samps, 1)
+        #   Vector for the real dependent variables in the data set
+        self.acutual_y = None
 
         # R2: float. R^2 statistic
         self.R2 = None
@@ -113,7 +117,7 @@ class LinearRegression(analysis.Analysis):
             print(f'Error: there must be atleast 1 ind_var and dep_var\nRight now they are {ind_vars} and  {dep_var}')
             sys.exit()
         if len(ind_vars) < 1:
-            print(f'Error: there must be atleast 1 ind_var')
+            print(f'Error: there must be at least 1 ind_var')
             sys.exit()
 
         ind_vars_array = np.array(ind_vars)
@@ -144,7 +148,7 @@ class LinearRegression(analysis.Analysis):
         self.ind_vars = ind_vars
         self.dep_var = dep_var
         self.A = self.data.select_data(self.ind_vars)
-        self.y = self.data.select_data([self.dep_var])
+        self.acutual_y = self.data.select_data([self.dep_var])
         self.p = p
 
         if not isinstance(slope, type(None)) and  not isinstance(intercept, type(None)):
@@ -166,24 +170,34 @@ class LinearRegression(analysis.Analysis):
             # so here I am going to do the linear regeression based on the method chosen
             if method == 'scipy':
                 if p == 1:
-                    c = self.linear_regression_scipy(self.A, self.y)
+                    c = self.linear_regression_scipy(self.A, self.acutual_y)
                 elif p >1:
                     poly_mat = self.make_polynomial_matrix(self.A,self.p)
-                    c = self.linear_regression_scipy(poly_mat, self.y)
+                    c = self.linear_regression_scipy(poly_mat, self.acutual_y)
                 self.slope = c[1:]
                 self.intercept = float(c[0])
             if method == 'normal':
                 if p == 1:
-                    c = self.linear_regression_normal(self.A, self.y)
+                    c = self.linear_regression_normal(self.A, self.acutual_y)
                 elif p >1:
                     poly_mat = self.make_polynomial_matrix(self.A,self.p)
-                    c = self.linear_regression_normal(poly_mat, self.y)
+                    c = self.linear_regression_normal(poly_mat, self.acutual_y)
+                self.slope = c[1:]
+                self.intercept = float(c[0])
+            if method == 'qr':
+                if p == 1:
+                    c = self.linear_regression_qr(self.A, self.acutual_y)
+                elif p >1:
+                    # poly_mat = self.make_polynomial_matrix(self.A,self.p)
+                    # c = self.linear_regression_normal(poly_mat, self.y)
+                    print(f"Error: P must = 1 it is {p}")
                 self.slope = c[1:]
                 self.intercept = float(c[0])
 
-        y_pred = self.predict()
-        self.residuals = self.compute_residuals(y_pred)
-        self.R2 = self.r_squared(y_pred)
+
+        self.predicted_y = self.predict()
+        self.residuals = self.compute_residuals(self.predicted_y)
+        self.R2 = self.r_squared(self.predicted_y)
         self.m_sse = self.mean_sse()
 
 
@@ -236,11 +250,80 @@ class LinearRegression(analysis.Analysis):
         A_first_part = (A.T@A)
         invA = np.linalg.inv(A_first_part)
 
-        second_part = (A.T)@(self.y)
+        second_part = (A.T)@(y)
 
         c = invA@second_part
 
         return c
+
+    def linear_regression_qr(self, A, y):
+        '''Performs a linear regression using the QR decomposition
+
+        (Week 2)
+
+        See notebook for a refresher on the equation
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars).
+            Data matrix for independent variables.
+        y: ndarray. shape=(num_data_samps, 1).
+            Data column for dependent variable.
+
+        Returns
+        -----------
+        c: ndarray. shape=(num_ind_vars+1,)
+            Linear regression slope coefficients for each independent var AND the intercept term
+
+        NOTE: You should not compute any matrix inverses! Check out scipy.linalg.solve_triangular
+        to backsubsitute to solve for the regression coefficients `c`.
+        '''
+        A = np.hstack([np.ones([A.shape[0], 1]), A])
+        Q, R = self.qr_decomposition(A)
+        c = scipy.linalg.solve_triangular(R,(Q.T@y))
+        return c
+
+    def qr_decomposition(self, A):
+        '''Performs a QR decomposition on the matrix A. Make column vectors orthogonal relative
+        to each other. Uses the Gram–Schmidt algorithm
+
+        (Week 2)
+
+        Parameters:
+        -----------
+        A: ndarray. shape=(num_data_samps, num_ind_vars+1).
+            Data matrix for independent variables.
+
+        Returns:
+        -----------
+        Q: ndarray. shape=(num_data_samps, num_ind_vars+1)
+            Orthonormal matrix (columns are orthogonal unit vectors — i.e. length = 1)
+        R: ndarray. shape=(num_ind_vars+1, num_ind_vars+1)
+            Upper triangular matrix
+
+        TODO:
+        - Q is found by the Gram–Schmidt orthogonalizing algorithm.
+        Summary: Step thru columns of A left-to-right. You are making each newly visited column
+        orthogonal to all the previous ones. You do this by projecting the current column onto each
+        of the previous ones and subtracting each projection from the current column.
+            - NOTE: Very important: Make sure that you make a COPY of your current column before
+            subtracting (otherwise you might modify data in A!).
+        Normalize each current column after orthogonalizing.
+        - R is found by equation summarized in notebook
+        '''
+
+        num_rows, num_cols = A.shape
+        Q = np.zeros((num_rows, num_cols))
+        for j in range(num_cols):
+            u = A[:, j]
+            for i in range(j):
+                # (Q[:, i]@u) * Q[:, i] is the projection
+                u = u - (Q[:, i] @ u) * Q[:, i]
+            Q[:, j] = u / np.linalg.norm(u)
+
+        R = Q.T @ A
+        return Q, R
+
 
     def predict(self, X=None, method = 'vectorized'):
         '''Use fitted linear regression model to predict the values of data matrix self.A.
@@ -294,10 +377,10 @@ class LinearRegression(analysis.Analysis):
         R2: float.
             The R^2 statistic
         '''
-        y_mean = np.mean(self.y)
-        r2_bottom = np.sum((self.y - y_mean) ** 2)
-        r2_top = np.sum((self.compute_residuals(y_pred))**2)
-        R2 = 1 - (r2_top/r2_bottom)
+        y_mean = np.mean(self.acutual_y)
+        r2_bottom = np.sum((self.acutual_y - y_mean) ** 2)
+        r2_top = np.sum((self.predicted_y - y_mean)**2)
+        R2 = (r2_top/r2_bottom)
         return R2
 
     def compute_residuals(self, y_pred):
@@ -316,7 +399,7 @@ class LinearRegression(analysis.Analysis):
             Difference between the y values and the ones predicted by the regression model at the
             data samples
         '''
-        residuals = self.y - y_pred
+        residuals = self.acutual_y - y_pred
         return residuals
 
 
@@ -516,7 +599,7 @@ class LinearRegression(analysis.Analysis):
         -----------
         ndarray. shape=(num_ind_vars, 1). The fitted regression slope(s).
         '''
-        return  self.slope
+        return self.slope
 
     def get_fitted_intercept(self):
         '''Returns the fitted regression intercept.
@@ -528,7 +611,7 @@ class LinearRegression(analysis.Analysis):
         '''
         return  self.intercept
 
-    def initialize(self, ind_vars, dep_var, slope, intercept, p):
+    def initialize(self, ind_vars, dep_var, slope, intercept, p = 1):
         '''Sets fields based on parameter values.
         (Week 2)
 

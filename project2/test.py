@@ -12,6 +12,12 @@ np.set_printoptions(suppress=True, precision=5)
 brewer_colors = cartocolors.qualitative.Safe_4.mpl_colormap
 
 
+
+
+
+
+
+
 import requests
 data_url = 'https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/WaffleDivorce.csv'
 data_request = requests.get('https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/WaffleDivorce.csv')
@@ -40,7 +46,17 @@ Allwh_transform = transformation.Transformation(Allwh_data)
 print(Allwh_data.get_headers())
 Allwh_transform.pair_plot(Allwh_data.get_headers()[:7],title = 'Waffle House Present Data',
                          cat = Allwh_data.get_headers()[7], diag = 'hist')
-#
+
+
+
+
+
+
+
+
+
+
+
 # #showing the use of a size and color scatter plot with the use of mpg data
 # plt.rcParams.update({'font.size': 20, 'figure.figsize': (12, 12)})
 # auto_data = Data('auto-mpg.csv')
