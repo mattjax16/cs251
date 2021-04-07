@@ -26,76 +26,76 @@ day_linear_reg.show()
 import transformation
 import copy
 
-normalized_day_bike_data = copy.copy(day_bike_data)
-day_bike_transform = transformation.Transformation(normalized_day_bike_data)
-
-normalized_day_bike_array = day_bike_transform.normalize_separately()
-
-
-def step_wise_linear_regression(dataObj, ind_vars=None, dep_var=None, method='normal',
-                                R2_list=[], R2_adjusted_list=[], ind_vars_used_ordered=[]):
-
-
-    # print(f'\nInd_Vars: {ind_vars}')
-
-    # could jsut pass in the linear regression object would be more efficiet
-    # but am making a new one for each recursion (run) of this function instead
-    lin_reg = linear_regression.LinearRegression(dataObj)
-
-    if isinstance(ind_vars, type(None)) or isinstance(dep_var, type(None)):
-        print(f'Error: there must be atleast 1 ind_var and dep_var\nRight now they are {ind_vars} and  {dep_var}')
-        sys.exit()
-
-    print(f'Length ind_var {len(ind_vars)}')
-
-    # if there are not ind_vars left return the R2_list, R2_adjusted_list, and ind_vars_used_ordered
-    if len(ind_vars) < 1:
-        return R2_list, R2_adjusted_list, ind_vars_used_ordered
-
-    headers_array = np.array(dataObj.get_headers())
-
-    if dep_var not in headers_array:
-        print(f'Error: dep_var: {dep_var} needs to be in {headers_array}')
-        sys.exit()
-    for ind_var in ind_vars:
-        if ind_var not in headers_array:
-            print(f'Error: ind_var: {ind_var} needs to be in {headers_array}')
-            sys.exit()
-
-    # if it is the first time of the function running for the data
-    max_R2_var = tuple()
-    if len(R2_list) == 0:
-        max_R2_var = ('holder', float('-inf'))
-    else:
-        max_R2_var = (ind_vars_used_ordered[-1], R2_list[-1])
-
-    # loop through all the variables to find the one with the best
-
-    for ind_var in ind_vars:
-        # print(f'\nindVar current {ind_var}')
-
-        # run linear regression bassed off of the method chosen
-        if method == 'scipy':
-            lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'scipy')
-        elif method == 'normal':
-            lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'normal')
-        elif method == 'qr':
-            lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'qr')
-
-        # see if R2 is greater
-        if lin_reg.R2 > max_R2_var[1]:
-            max_R2_var = (ind_var, lin_reg.R2)
-
-    # print(f'\nVar chosen is {max_R2_var}')
-
-    ind_vars.remove(max_R2_var[0])
-    ind_vars_used_ordered.append(max_R2_var[0])
-    R2_list.append(max_R2_var[1])
-    step_wise_linear_regression(dataObj, ind_vars, dep_var, method,R2_list, R2_adjusted_list, ind_vars_used_ordered)
-
-    return R2_list, R2_adjusted_list, ind_vars_used_ordered
-
-print(step_wise_linear_regression(normalized_day_bike_data, bike_headers[:-3], 'cnt'))
+# normalized_day_bike_data = copy.copy(day_bike_data)
+# day_bike_transform = transformation.Transformation(normalized_day_bike_data)
+#
+# normalized_day_bike_array = day_bike_transform.normalize_separately()
+#
+#
+# def step_wise_linear_regression(dataObj, ind_vars=None, dep_var=None, method='normal',
+#                                 R2_list=[], R2_adjusted_list=[], ind_vars_used_ordered=[]):
+#
+#
+#     # print(f'\nInd_Vars: {ind_vars}')
+#
+#     # could jsut pass in the linear regression object would be more efficiet
+#     # but am making a new one for each recursion (run) of this function instead
+#     lin_reg = linear_regression.LinearRegression(dataObj)
+#
+#     if isinstance(ind_vars, type(None)) or isinstance(dep_var, type(None)):
+#         print(f'Error: there must be atleast 1 ind_var and dep_var\nRight now they are {ind_vars} and  {dep_var}')
+#         sys.exit()
+#
+#     print(f'Length ind_var {len(ind_vars)}')
+#
+#     # if there are not ind_vars left return the R2_list, R2_adjusted_list, and ind_vars_used_ordered
+#     if len(ind_vars) < 1:
+#         return R2_list, R2_adjusted_list, ind_vars_used_ordered
+#
+#     headers_array = np.array(dataObj.get_headers())
+#
+#     if dep_var not in headers_array:
+#         print(f'Error: dep_var: {dep_var} needs to be in {headers_array}')
+#         sys.exit()
+#     for ind_var in ind_vars:
+#         if ind_var not in headers_array:
+#             print(f'Error: ind_var: {ind_var} needs to be in {headers_array}')
+#             sys.exit()
+#
+#     # if it is the first time of the function running for the data
+#     max_R2_var = tuple()
+#     if len(R2_list) == 0:
+#         max_R2_var = ('holder', float('-inf'))
+#     else:
+#         max_R2_var = (ind_vars_used_ordered[-1], R2_list[-1])
+#
+#     # loop through all the variables to find the one with the best
+#
+#     for ind_var in ind_vars:
+#         # print(f'\nindVar current {ind_var}')
+#
+#         # run linear regression bassed off of the method chosen
+#         if method == 'scipy':
+#             lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'scipy')
+#         elif method == 'normal':
+#             lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'normal')
+#         elif method == 'qr':
+#             lin_reg.linear_regression(ind_vars_used_ordered+[ind_var], dep_var, 'qr')
+#
+#         # see if R2 is greater
+#         if lin_reg.R2 > max_R2_var[1]:
+#             max_R2_var = (ind_var, lin_reg.R2)
+#
+#     # print(f'\nVar chosen is {max_R2_var}')
+#
+#     ind_vars.remove(max_R2_var[0])
+#     ind_vars_used_ordered.append(max_R2_var[0])
+#     R2_list.append(max_R2_var[1])
+#     step_wise_linear_regression(dataObj, ind_vars, dep_var, method,R2_list, R2_adjusted_list, ind_vars_used_ordered)
+#
+#     return R2_list, R2_adjusted_list, ind_vars_used_ordered
+#
+# print(step_wise_linear_regression(normalized_day_bike_data, bike_headers[:-3], 'cnt'))
 # R2_list, R2_adjusted_list, ind_vars_used_ordered = step_wise_linear_regression(normalized_day_bike_data, bike_headers[:-3], 'cnt')
 #
 # print(f'\n{R2_list}\n{ind_vars_used_ordered}')
@@ -136,43 +136,43 @@ print(step_wise_linear_regression(normalized_day_bike_data, bike_headers[:-3], '
 #
 #     print(1)
 
-# brain_filename = 'data/brain.csv'
-# brain_data = data.Data(brain_filename)
-#
-# brain_headers = brain_data.get_headers()
-# print(f'Brain Data Headers:\n{brain_headers}\n\n{len(brain_headers)} Variables')
-# lin_reg_brain_scipy = linear_regression.LinearRegression(brain_data)
-# print(f'The time it took for Scipy method is:')
-# lin_reg_brain_scipy.linear_regression(brain_headers[:61], brain_headers[-1], 'scipy')
-# print(f'\nThe MSSE for Scipy method is {lin_reg_brain_scipy.mean_sse()}')
-#
-# lin_reg_brain_norm = linear_regression.LinearRegression(brain_data)
-# print(f'The time it took for Normal method is:')
-# lin_reg_brain_norm.linear_regression(brain_headers[:61], brain_headers[-1], 'normal')
-# print(f'\nThe MSSE for Normal method is {lin_reg_brain_norm.mean_sse()}')
-#
-#
-# lin_reg_brain_qr = linear_regression.LinearRegression(brain_data)
-# print(f'The time it took for QR method is:')
-# lin_reg_brain_qr.linear_regression(brain_headers[:61], brain_headers[-1], 'qr')
-# print(f'\nThe MSSE for QR method is {lin_reg_brain_qr.mean_sse()}')
+brain_filename = 'data/brain.csv'
+brain_data = data.Data(brain_filename)
 
-# iris_filename = 'data/iris.csv'
-# iris_data = data.Data(iris_filename)
-#
-# A = iris_data.select_data(['sepal_length', 'petal_width'])
-# A1 = np.hstack([A, np.ones([len(A), 1])])
-#
-# lin_reg_qr = linear_regression.LinearRegression(iris_data)
-# myQ, myR = lin_reg_qr.qr_decomposition(A1)
-#
-# Q, R = np.linalg.qr(A1)
-# brain_headers_list = []
-# with open('data/brain_var_names.txt','r') as brain_headers_txt:
-#     brain_headers_list = brain_headers_txt.read().split(',')
-# brain_filename = 'data/brain.csv'
-# brain_data = data.Data(brain_filename, headers = brain_headers_list)
-# print(brain_data)
+brain_headers = brain_data.get_headers()
+print(f'Brain Data Headers:\n{brain_headers}\n\n{len(brain_headers)} Variables')
+lin_reg_brain_scipy = linear_regression.LinearRegression(brain_data)
+print(f'The time it took for Scipy method is:')
+lin_reg_brain_scipy.linear_regression(brain_headers[:61], brain_headers[-1], 'scipy')
+print(f'\nThe MSSE for Scipy method is {lin_reg_brain_scipy.mean_sse()}')
+
+lin_reg_brain_norm = linear_regression.LinearRegression(brain_data)
+print(f'The time it took for Normal method is:')
+lin_reg_brain_norm.linear_regression(brain_headers[:61], brain_headers[-1], 'normal')
+print(f'\nThe MSSE for Normal method is {lin_reg_brain_norm.mean_sse()}')
+
+
+lin_reg_brain_qr = linear_regression.LinearRegression(brain_data)
+print(f'The time it took for QR method is:')
+lin_reg_brain_qr.linear_regression(brain_headers[:61], brain_headers[-1], 'qr')
+print(f'\nThe MSSE for QR method is {lin_reg_brain_qr.mean_sse()}')
+
+iris_filename = 'data/iris.csv'
+iris_data = data.Data(iris_filename)
+
+A = iris_data.select_data(['sepal_length', 'petal_width'])
+A1 = np.hstack([A, np.ones([len(A), 1])])
+
+lin_reg_qr = linear_regression.LinearRegression(iris_data)
+myQ, myR = lin_reg_qr.qr_decomposition(A1)
+
+Q, R = np.linalg.qr(A1)
+brain_headers_list = []
+with open('data/brain_var_names.txt','r') as brain_headers_txt:
+    brain_headers_list = brain_headers_txt.read().split(',')
+brain_filename = 'data/brain.csv'
+brain_data = data.Data(brain_filename, headers = brain_headers_list)
+print(brain_data)
 #
 #
 #
