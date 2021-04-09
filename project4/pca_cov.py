@@ -90,7 +90,11 @@ class PCA_COV:
         NOTE: You should do this wihout any loops
         NOTE: np.cov is off-limits here — compute it from "scratch"!
         '''
-        pass
+
+        tm = data.mean()
+        Ac = data - data.mean()
+        cov_matrix = (Ac.T@Ac)/(data.shape[0]-1)
+        return cov_matrix
 
     def compute_prop_var(self, e_vals):
         '''Computes the proportion variance accounted for by the principal components (PCs).
