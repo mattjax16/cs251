@@ -58,6 +58,12 @@ class PCA_COV:
         #   Cumulative proportion variance accounted for by the PCs (ordered large-to-small)
         self.cum_var = None
 
+
+        #undo_normilazation: ndarray (steps, num_vars)
+        # Contains the values (row-wise going first to last) of the data needed to undo the normalization
+        #TODO maybe add operdator data key value pair
+        self.undo_normilazation = None
+
     def get_prop_var(self):
         '''(No changes should be needed)'''
         return self.prop_var
@@ -91,8 +97,8 @@ class PCA_COV:
         NOTE: np.cov is off-limits here — compute it from "scratch"!
         '''
 
-        tm = data.mean()
-        Ac = data - data.mean()
+
+        Ac = data - data.mean(axis=0)
         cov_matrix = (Ac.T@Ac)/(data.shape[0]-1)
         return cov_matrix
 
@@ -108,9 +114,9 @@ class PCA_COV:
         Python list. len = num_pcs
             Proportion variance accounted for by the PCs
         '''
-        pass
+        return list(e_vals/e_vals.sum())
 
-    def compute_cum_var(self, prop_var):
+    def compute_cum_var(self, prop_var, method = 'loop'):
         '''Computes the cumulative variance accounted for by the principal components (PCs).
 
         Parameters:
@@ -124,9 +130,28 @@ class PCA_COV:
         Python list. len = num_pcs
             Cumulative variance accounted for by the PCs
         '''
-        pass
+        cum_var_list = []
+        if method == 'loop':
+            for i in range(0,len(prop_var)):
+                cum_var_list.append(np.array(prop_var[:(i+1)]).sum())
+            return cum_var_list
 
-    def pca(self, vars, normalize=False):
+
+
+
+
+
+    #helper method to normalize data sepreatly when preforming PCA:
+    def normalize_separately(self, A):
+        A_min = A.min(axis = 0)
+        A_range = A.max(axis = 0) - A_min
+
+        self.undo_normilazation = np.stack((A_range,A_min), axis = 0)
+        A = (A-A_min)/A_range
+        return A
+
+
+    def pca(self, vars, normalize=False, norm_method = 'separately'):
         '''Performs PCA on the data variables `vars`
 
         Parameters:
@@ -136,6 +161,8 @@ class PCA_COV:
             Variable names must match those used in the `self.data` DataFrame.
         normalize: boolean.
             If True, normalize each data variable so that the values range from 0 to 1.
+        norm_method: string
+            By default is seperatly, decides which normalization method to use if normalize is True
 
         NOTE: Leverage other methods in this class as much as possible to do computations.
 
@@ -149,7 +176,37 @@ class PCA_COV:
         - Make sure to compute everything needed to set all instance variables defined in constructor,
         except for self.A_proj (this will happen later).
         '''
-        pass
+
+        #check that all vars are in self.data
+        for var in vars:
+            if var not in self.data.columns.values:
+                print(f'Error!!! var:\n\t{var}\nNeed to be in:\n\t{self.data.columns.values}')
+                return
+        self.vars = vars
+        self.A = self.data[vars].values
+
+        # check to see if data needs to be normalized
+        if normalize:
+            self.normalized = True
+            # Check to see which normalization method to do and do it
+            if norm_method == 'separately':
+                self.A = self.normalize_separately(self.A)
+
+
+        #Get the covariance matrix (A is centerd in the method)
+        cov_matrix = self.covariance_matrix(self.A)
+
+        # Get eigenvalues and eigenvectors
+        self.e_vals, self.e_vecs = np.linalg.eig(cov_matrix)
+
+        # Get Proportion variance accounted for by the PCs (ordered large-to-small)
+        self.prop_var = self.compute_prop_var(self.e_vals)
+
+        # cum_var: Python list. len(cum_var) = num_pcs
+        # Get Cumulative proportion variance accounted for by the PCs (ordered large-to-small)
+        self.cum_var = self.compute_cum_var(self.prop_var)
+
+        return
 
     def elbow_plot(self, num_pcs_to_keep=None):
         '''Plots a curve of the cumulative variance accounted for by the top `num_pcs_to_keep` PCs.
