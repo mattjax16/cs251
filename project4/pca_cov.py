@@ -208,7 +208,7 @@ class PCA_COV:
 
         return
 
-    def elbow_plot(self, num_pcs_to_keep=None):
+    def elbow_plot(self, num_pcs_to_keep=None,markersize='7'):
         '''Plots a curve of the cumulative variance accounted for by the top `num_pcs_to_keep` PCs.
         x axis corresponds to top PCs included (large-to-small order)
         y axis corresponds to proportion variance accounted for
@@ -222,7 +222,24 @@ class PCA_COV:
         NOTE: Reminder to create useful x and y axis labels.
         NOTE: Don't write plt.show() in this method
         '''
-        pass
+        if isinstance(num_pcs_to_keep, type(None)):
+            fig, ax = plt.subplots(1, 1)
+            num_PCs = [(i + 1) for i in range(len(self.cum_var))]
+            ax.plot(num_PCs,self.cum_var, marker = 'o', markersize=markersize, markerfacecolor='red')
+            ax.set_xticks(num_PCs)
+            ax.set_xticklabels([f'K{i}' for i in num_PCs])
+            ax.set_xlabel("Principle Components (Dimensions)")
+            ax.set_ylabel("Cumulative Variance Explained")
+            ax.set_title(f"Cumulative Variance Explained\nFor All Principle Components")
+        else:
+            fig, ax = plt.subplots(1, 1)
+            num_PCs = [(i + 1) for i in range(len(self.cum_var[:num_pcs_to_keep]))]
+            ax.plot(num_PCs, self.cum_var[:num_pcs_to_keep], marker='o', markersize=markersize, markerfacecolor='red')
+            ax.set_xticks(num_PCs)
+            ax.set_xticklabels([f'K{i}' for i in num_PCs])
+            ax.set_xlabel("Principle Components (Dimensions)")
+            ax.set_ylabel("Cumulative Variance Explained")
+            ax.set_title(f"Cumulative Variance Explained\nFor The Top {num_pcs_to_keep}\nPrinciple Components")
 
     def pca_project(self, pcs_to_keep):
         '''Project the data onto `pcs_to_keep` PCs (not necessarily contiguous)
