@@ -18,4 +18,11 @@ pca = pca_cov.PCA_COV(iris_data)
 iris_headers = list(iris_data.columns[:-1])
 # pca.pca(iris_headers)
 pca.pca(iris_headers, normalize=True)
-print(1)
+# question is an array passed in not python list
+num_dims = 2
+t_list = [0,2,3]
+pcs_to_keep = np.arange(num_dims)
+# iris_proj = pca.pca_project(pcs_to_keep)
+iris_proj = pca.pca_project(t_list)
+# print(iris_proj.shape)
+print(f'Done Testing')

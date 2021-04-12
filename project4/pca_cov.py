@@ -261,7 +261,39 @@ class PCA_COV:
 
         NOTE: This method should set the variable `self.A_proj`
         '''
-        pass
+
+        #check for correct pcs_to_keep
+        if len(pcs_to_keep) > len(self.e_vals):
+            print(f'Error There Are More PCs To Keep Than PCs Avalible')
+            exit()
+        if max(pcs_to_keep) > len(self.e_vals):
+            print(f'Error The Max PC to Keep ({max(pcs_to_keep)}) is to high\n'+
+                  f'Max it can be is {len(self.e_vals)-1}')
+            exit()
+        if min(pcs_to_keep) < 0:
+            print(f'Error Min Pc to keep is {min(pcs_to_keep)}\n'+
+                  f'Smallest it can be is 0')
+            exit()
+
+        # make sure pcs_to_keep is an array
+        pcs_to_keep = np.ravel(np.array(pcs_to_keep))
+
+        #make sure all pcs_to_keep are ints
+        #Ran into a lot of errors since it says in parameters will be a list and in project
+        # an array is passed in so after lots of trial an error I came across this genius method
+        # from here https://stackoverflow.com/questions/934616/how-do-i-find-out-if-a-numpy-array-contains-integers
+        # which I fit to meet my needs for this project
+        if not all(np.equal(np.mod(pcs_to_keep, 1), 0)):
+            print(f'Error!! All PCs Need to be Ints, They are currently:'
+                  + f'\n\t{pcs_to_keep}')
+
+        #select the pcs_to_keep for P hat
+        P_hat = self.e_vecs[:,pcs_to_keep]
+        A_proj = self.A @ P_hat
+        self.A_proj  = A_proj
+        return  A_proj
+
+
 
     def pca_then_project_back(self, top_k):
         '''Project the data into PCA space (on `top_k` PCs) then project it back to the data space
