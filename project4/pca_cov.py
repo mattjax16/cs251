@@ -35,6 +35,10 @@ class PCA_COV:
         #   Matrix of data selected for PCA
         self.A = None
 
+        # A: ndarray. shape=(num_samps, num_selected_vars)
+        #   Matrix of data selected for PCA centered
+        self.Ac = None
+
         # normalized: boolean.
         #   Whether data matrix (A) is normalized by self.pca
         self.normalized = None
@@ -99,6 +103,11 @@ class PCA_COV:
 
 
         Ac = data - data.mean(axis=0)
+
+        #set self.Ac
+        self.Ac = Ac
+
+        #compute cov matrix
         cov_matrix = (Ac.T@Ac)/(data.shape[0]-1)
         return cov_matrix
 
@@ -289,7 +298,7 @@ class PCA_COV:
 
         #select the pcs_to_keep for P hat
         P_hat = self.e_vecs[:,pcs_to_keep]
-        A_proj = self.A @ P_hat
+        A_proj = self.Ac @ P_hat
         self.A_proj  = A_proj
         return  A_proj
 
@@ -304,11 +313,40 @@ class PCA_COV:
 
         Returns:
         -----------
-        ndarray. shape=(num_samps, num_selected_vars)
+        A_reconstructed: ndarray. shape=(num_samps, num_selected_vars)
 
         TODO:
         - Project the data on the `top_k` PCs (assume PCA has already been performed).
         - Project this PCA-transformed data back to the original data space
         - If you normalized, remember to rescale the data projected back to the original data space.
         '''
-        pass
+
+        # Check that PCA has been done
+        if isinstance(self.prop_var, type(None)):
+            print(f'Error PCA needs to be done!!!!!!')
+            exit()
+
+        # check that top_k isn't greater than the amount of PCs
+        if top_k > len(self.prop_var):
+            print(f'Error there are not {top_k} PCs!!!'
+                  +f'\nIn total there are {len(self.prop_var)} PCs!')
+            exit()
+
+
+        A_means = np.mean(self.A)
+        pcs_to_keep = np.arange(top_k)
+        A_reconstructed = (self.pca_project(pcs_to_keep)) @ (self.e_vecs[:,pcs_to_keep]).T
+
+        if self.normalized:
+            A_reconstructed = self.undo_normilazation[:,0] * A_reconstructed
+
+        A_reconstructed = A_reconstructed + A_means
+        return A_reconstructed
+
+        # if top_k == len(self.prop_var):
+        #     A_reconstructed = self.Ac
+        # elif top_k < len(self.prop_var) and top_k >= 1:
+        #     pass
+        # AC_hat = self.A[:,[]]
+        # iris_proj = self.pca_project(pcs_to_keep)
+
