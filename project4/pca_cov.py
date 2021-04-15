@@ -217,7 +217,7 @@ class PCA_COV:
 
         return
 
-    def elbow_plot(self, num_pcs_to_keep=None,markersize='7'):
+    def elbow_plot(self, num_pcs_to_keep=None,markersize='7',x_label_size = 10, figsize = (10,10),show_just_numbers = False, show_final_k_percentage = False):
         '''Plots a curve of the cumulative variance accounted for by the top `num_pcs_to_keep` PCs.
         x axis corresponds to top PCs included (large-to-small order)
         y axis corresponds to proportion variance accounted for
@@ -232,23 +232,27 @@ class PCA_COV:
         NOTE: Don't write plt.show() in this method
         '''
         if isinstance(num_pcs_to_keep, type(None)):
-            fig, ax = plt.subplots(1, 1)
+            fig, ax = plt.subplots(1, 1,figsize =figsize)
             num_PCs = [(i + 1) for i in range(len(self.cum_var))]
             ax.plot(num_PCs,self.cum_var, marker = 'o', markersize=markersize, markerfacecolor='red')
             ax.set_xticks(num_PCs)
-            ax.set_xticklabels([f'K{i}' for i in num_PCs])
+            if not show_just_numbers:
+                ax.set_xticklabels([f'K{i}' for i in num_PCs], fontsize=x_label_size)
             ax.set_xlabel("Principle Components (Dimensions)")
             ax.set_ylabel("Cumulative Variance Explained")
             ax.set_title(f"Cumulative Variance Explained\nFor All Principle Components")
         else:
-            fig, ax = plt.subplots(1, 1)
+            fig, ax = plt.subplots(1, 1,figsize =figsize)
             num_PCs = [(i + 1) for i in range(len(self.cum_var[:num_pcs_to_keep]))]
             ax.plot(num_PCs, self.cum_var[:num_pcs_to_keep], marker='o', markersize=markersize, markerfacecolor='red')
             ax.set_xticks(num_PCs)
-            ax.set_xticklabels([f'K{i}' for i in num_PCs])
+            if not show_just_numbers:
+                ax.set_xticklabels([f'K{i}' for i in num_PCs], fontsize = x_label_size)
             ax.set_xlabel("Principle Components (Dimensions)")
             ax.set_ylabel("Cumulative Variance Explained")
             ax.set_title(f"Cumulative Variance Explained\nFor The Top {num_pcs_to_keep}\nPrinciple Components")
+            if show_final_k_percentage:
+                ax.annotate(f'{self.cum_var[num_pcs_to_keep-1]: .4f}', (num_PCs[-1], self.cum_var[:num_pcs_to_keep][-1]))
 
     def pca_project(self, pcs_to_keep):
         '''Project the data onto `pcs_to_keep` PCs (not necessarily contiguous)
@@ -338,15 +342,9 @@ class PCA_COV:
         A_reconstructed = (self.pca_project(pcs_to_keep)) @ (self.e_vecs[:,pcs_to_keep]).T
 
         if self.normalized:
-            A_reconstructed = self.undo_normilazation[:,0] * A_reconstructed
+            A_reconstructed = self.undo_normilazation[0,:].T * A_reconstructed
 
         A_reconstructed = A_reconstructed + A_means
         return A_reconstructed
 
-        # if top_k == len(self.prop_var):
-        #     A_reconstructed = self.Ac
-        # elif top_k < len(self.prop_var) and top_k >= 1:
-        #     pass
-        # AC_hat = self.A[:,[]]
-        # iris_proj = self.pca_project(pcs_to_keep)
 
