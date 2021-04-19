@@ -62,6 +62,9 @@ class PCA_COV:
         #   Cumulative proportion variance accounted for by the PCs (ordered large-to-small)
         self.cum_var = None
 
+        #A_mean: ndarray(num_selected_vars,)
+        # Holds the mean of A
+        self.A_mean = None
 
         #undo_normilazation: ndarray (steps, num_vars)
         # Contains the values (row-wise going first to last) of the data needed to undo the normalization
@@ -84,6 +87,11 @@ class PCA_COV:
         '''(No changes should be needed)'''
         return self.e_vecs
 
+
+    def get_A_mean(self):
+        '''(No changes should be needed)'''
+        return self.A_mean
+
     def covariance_matrix(self, data):
         '''Computes the covariance matrix of `data`
 
@@ -101,8 +109,8 @@ class PCA_COV:
         NOTE: np.cov is off-limits here — compute it from "scratch"!
         '''
 
-
-        Ac = data - data.mean(axis=0)
+        self.A_mean = data.mean(axis=0)
+        Ac = data - self.A_mean
 
         #set self.Ac
         self.Ac = Ac
@@ -303,8 +311,8 @@ class PCA_COV:
         #select the pcs_to_keep for P hat
         P_hat = self.e_vecs[:,pcs_to_keep]
         A_proj = self.Ac @ P_hat
-        self.A_proj  = A_proj
-        return  A_proj
+        self.A_proj = A_proj
+        return A_proj
 
 
 

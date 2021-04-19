@@ -50,7 +50,9 @@ class KMeans():
         -----------
         data: ndarray. shape=(num_samps, num_features)
         '''
-        pass
+        self.data = data.values
+        self.num_samps = data.values.shape[0]
+        self.num_features = data.values.shape[1]
 
     def get_data(self):
         '''Get a COPY of the data
@@ -59,7 +61,8 @@ class KMeans():
         -----------
         ndarray. shape=(num_samps, num_features). COPY of the data
         '''
-        pass
+
+        return np.copy(self.data)
 
     def get_centroids(self):
         '''Get the K-means centroids
@@ -98,7 +101,10 @@ class KMeans():
         NOTE: Implement without any for loops (you will thank yourself later since you will wait
         only a small fraction of the time for your code to stop running)
         '''
-        pass
+        pt_1 = pt_1.reshape(1,pt_1.size)
+        pt_2 = pt_2.reshape(1, pt_2.size)
+        euclid_dist = np.sqrt(np.sum((pt_1-pt_2)*(pt_1-pt_2),axis=1))
+        return euclid_dist[0]
 
     def dist_pt_to_centroids(self, pt, centroids):
         '''Compute the Euclidean distance between data sample `pt` and and all the cluster centroids
