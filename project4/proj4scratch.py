@@ -17,7 +17,7 @@ pca = pca_cov.PCA_COV(iris_data)
 # Test pca (no normalization) here
 iris_headers = list(iris_data.columns[:-1])
 # pca.pca(iris_headers)
-pca.pca(iris_headers, normalize=True)
+# pca.pca(iris_headers, normalize=True)
 # question is an array passed in not python list
 # num_dims = 2
 # t_list = [0,2,3]
@@ -104,7 +104,7 @@ def vectorize_images(images_data):
 
 
 
-def match_photo(known_data, known_data_labels, querry_data, num_top_pcs = 32, threshold=0.70,normalization = False, vectorize_image_data = True):
+def match_photo(known_data, known_data_labels, querry_data, num_top_pcs = 32, threshold=0.70,normalization = False, vectorize_image_data = True, get_certian_distances = None):
 
    if vectorize_image_data:
        known_data = vectorize_images(known_data)
@@ -123,12 +123,24 @@ def match_photo(known_data, known_data_labels, querry_data, num_top_pcs = 32, th
    P_hat = known_pca.get_eigenvectors()[:, :num_top_pcs]
    querry_img_projection = querry_data @ P_hat
 
+
+   distance_array = []
+
    # computing distance between querry image projection and projected known images
    # Will return at the first image that meets the thresh hold
-   for known_name, known_projection in zip(known_data_labels,known_pca_projections):
+   for img_index , zipped_vals in enumerate(zip(known_data_labels,known_pca_projections)):
+       known_name, known_projection = zipped_vals
        image_distance = abs(distance_between_images(known_projection, querry_img_projection))
+
+       if not isinstance(get_certian_distances, type(None)):
+           if known_name == get_certian_distances:
+               distance_array.append([image_distance,img_index])
+
        if image_distance < threshold:
-           return known_name
+           return known_name, distance_array
+
+   distance_array = np.array(distance_array)
+   return None, distance_array
 
 
 
@@ -166,11 +178,11 @@ face_imgs_vec  = face_imgs.reshape(face_imgs.shape[0],face_imgs.shape[1]*face_im
 #
 # print(f'{test_match_result}')
 
-
-gw_test_im = plt.imread('data/gw_test_nocrop.png')
-fig, axes = plt.subplots(1,1)
-axes = plot_img(axes,gw_test_im,f'G.W Bush Tesh Im No Crop Colored')
-plt.show()
+#
+# gw_test_im = plt.imread('data/gw_test_nocrop.png')
+# fig, axes = plt.subplots(1,1)
+# axes = plot_img(axes,gw_test_im,f'G.W Bush Tesh Im No Crop Colored')
+# plt.show()
 
 # WITH OPEN CV
 test_know_GWB_face_img = face_imgs[1]
@@ -183,16 +195,42 @@ gw_img_cv_face_crop = gw_img_cv[104:258,130:285]
 
 gw_resized = cv2.resize(gw_img_cv_face_crop, dsize=(64, 64), interpolation=cv2.INTER_CUBIC)
 
-fig, axes = plt.subplots(2,2)
-axes[0,0] = plot_img(axes[0,0],gw_img_cv,f'G.W Bush No Crop Grey')
-axes[1,0] = plot_img(axes[1,0],gw_img_cv_face_crop,f'Cropped Grey')
-axes[0,1] = plot_img(axes[0,1],test_know_GWB_face_img, f'{test_know_GWB_face_name}\nKnow Test Image')
-axes[1,1] = plot_img(axes[1,1],gw_resized, f'Resized to 64 by 64')
-plt.show()
+# fig, axes = plt.subplots(2,2)
+# axes[0,0] = plot_img(axes[0,0],gw_img_cv,f'G.W Bush No Crop Grey')
+# axes[1,0] = plot_img(axes[1,0],gw_img_cv_face_crop,f'Cropped Grey')
+# axes[0,1] = plot_img(axes[0,1],test_know_GWB_face_img, f'{test_know_GWB_face_name}\nKnow Test Image')
+# axes[1,1] = plot_img(axes[1,1],gw_resized, f'Resized to 64 by 64')
+# plt.show()
+#
+# test_match_result_GWB_3 = match_photo(known_data=face_imgs, known_data_labels=face_names,
+#             querry_data=gw_resized, num_top_pcs=3, threshold = 0.7,get_certian_distances = 'George W Bush')
+#
+# test_match_result_GWB_14 = match_photo(known_data=face_imgs, known_data_labels=face_names,
+#             querry_data=gw_resized, num_top_pcs=14, threshold = 0.7,get_certian_distances = 'George W Bush')
+#
+# print(f'{test_match_result_GWB_3}')
+# print(f'{test_match_result_GWB_14}')
 
-test_match_result_GWB = match_photo(known_data=face_imgs, known_data_labels=face_names,
-            querry_data=gw_resized, num_top_pcs=3, threshold= 0.7)
+know_faces_df = pd.DataFrame(vectorize_images(face_imgs))
+know_faces_df.insert(0,'Image Name', face_names)
+know_faces_df
 
-print(f'{test_match_result_GWB}')
+GWB_df = know_faces_df.loc[know_faces_df['Image Name'] == 'George W Bush']
+
+gwb_imgs_reshaped = GWB_df.select_dtypes('number').values
+gwb_imgs_reshaped = gwb_imgs_reshaped.reshape(gwb_imgs_reshaped.shape[0], 64,64)
+
+#%%
+match_result_GWB_data_set_k_37_thresh_0_9 = match_photo(known_data=gwb_imgs_reshaped, known_data_labels=['George W Bush' for i in range(0,gwb_imgs_reshaped.shape[0])],
+            querry_data=gw_resized, num_top_pcs=5, threshold= 0.9,get_certian_distances = 'George W Bush')
+
+min_dist = match_result_GWB_data_set_k_37_thresh_0_9[1][:,0]
+
+print(f'{match_result_GWB_data_set_k_37_thresh_0_9[0]}')
+
+
+
+
+
 
 print(f'Done Testing')

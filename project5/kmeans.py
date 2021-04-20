@@ -6,7 +6,7 @@ CS 251 Data Analysis Visualization, Spring 2021
 import numpy as np
 import matplotlib.pyplot as plt
 from palettable import cartocolors
-
+import palettable
 
 class KMeans():
     def __init__(self, data=None):
@@ -41,6 +41,10 @@ class KMeans():
         if data is not None:
             self.num_samps, self.num_features = data.shape
 
+
+
+        #TODO ASK MY NOT MAKE A self.dataframe object
+
     def set_data(self, data):
         '''Replaces data instance variable with `data`.
 
@@ -50,7 +54,7 @@ class KMeans():
         -----------
         data: ndarray. shape=(num_samps, num_features)
         '''
-        self.data = data.values
+        self.data = data
         self.num_samps = data.values.shape[0]
         self.num_features = data.values.shape[1]
 
@@ -124,9 +128,12 @@ class KMeans():
         NOTE: Implement without any for loops (you will thank yourself later since you will wait
         only a small fraction of the time for your code to stop running)
         '''
-        pass
 
-    def initialize(self, k):
+        centroid_dist_array = np.sqrt(np.sum((pt - centroids) * (pt - centroids), axis=1))
+        return centroid_dist_array
+
+
+    def initialize(self, k, init_method = 'points'):
         '''Initializes K-means by setting the initial centroids (means) to K unique randomly
         selected data samples
 
@@ -140,9 +147,23 @@ class KMeans():
 
         NOTE: Can be implemented without any for loops
         '''
-        pass
+        if init_method == 'range':
 
-    def cluster(self, k=2, tol=1e-2, max_iter=1000, verbose=False):
+            maxs = np.max(self.data,axis = 0)
+            mins = np.min(self.data,axis = 0)
+            starting_centroids = np.random.uniform(mins,maxs, size = (k,mins.size))
+        elif init_method == 'points':
+
+            starting_centroid_point_indicies = np.random.choice(np.arange(self.data.shape[0]), replace = False,size = k)
+            starting_centroids = self.data[starting_centroid_point_indicies,:]
+        else:
+            print(f'Error Method needs to be "range" or "points" currently it is {init_method}')
+            raise Exception
+            exit()
+
+        return starting_centroids
+
+    def cluster(self, k=2, tol=1e-2, max_iter=1000, verbose=False, init_method = 'points'):
         '''Performs K-means clustering on the data
 
         Parameters:
@@ -166,8 +187,26 @@ class KMeans():
         (All instance variables defined in constructor should be populated with meaningful values)
         - Print out total number of iterations K-means ran for
         '''
-        pass
+        self.k = k
 
+        # - Initialize K-means variables
+        self.centroids = self.initialize(k,init_method)
+
+        #loop max_iter times
+        for i in np.arange(max_iter):
+            self.data_centroid_labels = self.update_labels(self.centroids)
+            self.inertia = self.compute_inertia()
+
+            new_centroids, centroid_diff = self.update_centroids(k=k,data_centroid_labels=self.data_centroid_labels,prev_centroids=self.centroids)
+            if np.max(centroid_diff).all() < tol:
+                if verbose:
+                    print(f"{i} Iterations")
+                return self.inertia, i
+            self.centroids = new_centroids
+
+        #TODO maybe update self.dataframe here
+
+        return self.inertia, max_iter
     def cluster_batch(self, k=2, n_iter=1, verbose=False):
         '''Run K-means multiple times, each time with different initial conditions.
         Keeps track of K-means instance that generates lowest inertia. Sets the following instance
@@ -199,7 +238,11 @@ class KMeans():
         Example: If we have 3 clusters and we compute distances to data sample i: [0.1, 0.5, 0.05]
         labels[i] is 2. The entire labels array may look something like this: [0, 2, 1, 1, 0, ...]
         '''
-        pass
+        data_distance_from_centroids = np.apply_along_axis(func1d = self.dist_pt_to_centroids,
+                                                           axis = 1, arr = self.data, centroids = centroids)
+
+        labels = np.argmin(data_distance_from_centroids, axis = 1)
+        return labels
 
     def update_centroids(self, k, data_centroid_labels, prev_centroids):
         '''Computes each of the K centroids (means) based on the data assigned to each cluster
@@ -219,7 +262,25 @@ class KMeans():
         centroid_diff. ndarray. shape=(k, self.num_features).
             Difference between current and previous centroid values
         '''
-        pass
+
+        new_centroids = []
+        centroid_diff = []
+        for centroid_label, prev_centroid in zip(np.arange(k), prev_centroids):
+            data_group_indicies = np.where(data_centroid_labels == centroid_label)
+
+            data_with_label = np.squeeze(self.data[data_group_indicies,:])
+
+            if data_with_label.ndim == 1:
+                new_centroid = data_with_label
+            else:
+                new_centroid = data_with_label.mean(axis=0)
+            new_centroids.append(new_centroid)
+            #TODO maybe no abs for better speed since it is very computationaly intensive
+            centroid_diff.append(abs(new_centroid - prev_centroid))
+
+        new_centroids = np.array(new_centroids, dtype= np.float64 )
+        centroid_diff = np.array(centroid_diff, dtype= np.float64)
+        return new_centroids, centroid_diff
 
     def compute_inertia(self):
         '''Mean squared distance between every data sample and its assigned (nearest) centroid
@@ -232,12 +293,22 @@ class KMeans():
         -----------
         float. The average squared distance between every data sample and its assigned cluster centroid.
         '''
-        pass
 
-    def plot_clusters(self):
+        sum_dist_of_centroids = []
+        for index, centroid in enumerate(self.centroids):
+            centroid_sum = np.sum((self.data[np.where(self.data_centroid_labels == index),:] - centroid) *
+                   (self.data[np.where(self.data_centroid_labels == index),:] - centroid), axis=1)
+            sum_dist_of_centroids.append(centroid_sum)
+
+        return np.sum(np.array(sum_dist_of_centroids))/self.num_samps
+
+    def plot_clusters(self, cmap = palettable.colorbrewer.qualitative.Paired_12.mpl_colormap, title = '' ,x_axis = 0, y_axis = 1, fig_sz = (8,8), legend_font_size = 10):
+
         '''Creates a scatter plot of the data color-coded by cluster assignment.
 
-        TODO:
+        cmap = palettable.colorbrewer.qualitative.Paired_12.mpl_colors
+
+        TODO: FIX THE LEGEND ALSO IF I WAS USING A DATA FRAME COULD USE
         - Plot samples belonging to a cluster with the same color.
         - Plot the centroids in black with a different plot marker.
         - The default scatter plot color palette produces colors that may be difficult to discern
@@ -246,9 +317,39 @@ class KMeans():
             You should use a palette Colorbrewer2 palette. Pick one with a generous
             number of colors so that you don't run out if k is large (e.g. 10).
         '''
-        pass
+        fig, axes = plt.subplots(1,1,figsize = fig_sz)
 
-    def elbow_plot(self, max_k):
+        #TODO maybe set up data frame based of of label
+
+        # Set the color map (cmap) to the colorbrewer one
+        scat = axes.scatter(self.data[:,x_axis], self.data[:,y_axis], c=self.data_centroid_labels, cmap=cmap)
+        # # Show the colorbar
+        # cbar = fig.colorbar(scat)
+        #
+        # # set labels
+        # cbar.ax.set_ylabel(c_var, fontsize=20)
+
+        # colors_legend_size = unique_c_vals.size
+        color_legend = axes.legend(*scat.legend_elements(), title = 'Groups:', loc = 'best',fontsize = legend_font_size,
+                                   title_fontsize = legend_font_size)
+
+        # color_legend = axes.legend(*scat.legend_elements(), bbox_to_anchor=(1.2, 1),
+        #                          loc="upper left")
+        # frameon = True
+
+        axes.add_artist(color_legend)
+
+        # axes.set_color_cycle(cmap)
+        # for group in np.unique(self.data_centroid_labels):
+        #
+        #     x_data = self.data[self.data_centroid_labels == group,x_axis]
+        #     y_data = self.data[self.data_centroid_labels == group, y_axis]
+        #     axes.scatter(x_data,y_data,label = f'Group {group}')
+        #     axes.set_title(title)
+        #     axes.legend([f'Group {i+1}' for i in np.arange(np.unique(self.data_centroid_labels).size)])
+        return fig, axes
+
+    def elbow_plot(self, max_k, title = '',fig_sz = (8,8)):
         '''Makes an elbow plot: cluster number (k) on x axis, inertia on y axis.
 
         Parameters:
@@ -259,7 +360,19 @@ class KMeans():
         - Run k-means with k=1,2,...,max_k, record the inertia.
         - Make the plot with appropriate x label, and y label, x tick marks.
         '''
-        pass
+
+        #set up plot
+        fig, axes = plt.subplots(1,1,figsize =fig_sz)
+
+        k_s = np.arange(max_k) + 1
+        #do all the k-means
+        k_means_interia = [self.cluster(i)[0] for i in k_s]
+        axes.plot(k_means_interia)
+        axes.set_xlabel('Cluster(s)')
+        axes.set_ylabel('Inertia')
+        axes.set_title(title)
+        plt.show()
+        return fig,axes
 
     def replace_color_with_centroid(self):
         '''Replace each RGB pixel in self.data (flattened image) with the closest centroid value.

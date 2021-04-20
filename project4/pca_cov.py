@@ -164,7 +164,9 @@ class PCA_COV:
         A_range = A.max(axis = 0) - A_min
 
         self.undo_normilazation = np.stack((A_range,A_min), axis = 0)
-        A = (A-A_min)/A_range
+        norm_A_first_part = (A-A_min)
+        if A_range.max() != 0 and A_range.min() != 0:
+            A = norm_A_first_part/A_range
         return A
 
 
