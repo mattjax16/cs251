@@ -261,9 +261,10 @@ class KMeans():
         Example: If we have 3 clusters and we compute distances to data sample i: [0.1, 0.5, 0.05]
         labels[i] is 2. The entire labels array may look something like this: [0, 2, 1, 1, 0, ...]
         '''
-        data_distance_from_centroids = np.apply_along_axis(func1d = self.dist_pt_to_centroids,
-                                                           axis = 1, arr = self.data, centroids = centroids)
-
+#         data_distance_from_centroids = np.apply_along_axis(func1d = self.dist_pt_to_centroids,
+#                                                            axis = 1, arr = self.data, centroids = centroids)
+        data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data**2).sum(axis=-1)[:, None] + (centroids**2).sum(axis=-1)[None]
+        data_distance_from_centroids = np.sqrt(data_distance_from_centroids)
         labels = np.argmin(data_distance_from_centroids, axis = 1)
         return labels
 
