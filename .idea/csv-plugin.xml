@@ -3,6 +3,13 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
+        <entry key="$USER_HOME$/Colby/cs251/ProjectsVenv/lib/python3.8/site-packages/scipy/cluster/vq.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/project2/transformation.py">
           <value>
             <Attribute>

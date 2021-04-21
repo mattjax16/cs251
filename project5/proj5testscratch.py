@@ -3,7 +3,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
-
+from scipy.cluster.vq import kmeans as sckm
 import kmeans
 
 plt.style.use(['seaborn-colorblind', 'seaborn-darkgrid'])
@@ -17,6 +17,7 @@ super_simple = super_simple.values
 
 cluster = kmeans.KMeans(super_simple)
 
+test_sk = sckm(super_simple,3,1000)
 
 
 # a = np.array([1, 2, 3, 4])

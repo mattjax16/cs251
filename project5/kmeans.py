@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from palettable import cartocolors
 import palettable
+import concurrent.futures
 
 class KMeans():
     def __init__(self, data=None):
@@ -67,6 +68,9 @@ class KMeans():
         '''
 
         return np.copy(self.data)
+
+    def get_inertia(self):
+        return  self.inertia
 
     def get_centroids(self):
         '''Get the K-means centroids
@@ -192,22 +196,30 @@ class KMeans():
         # - Initialize K-means variables
         self.centroids = self.initialize(k,init_method)
 
-        #loop max_iter times
-        for i in np.arange(max_iter):
+
+        #do K-means untils distance less than thresh-hold or max ittters reached
+        i = 0
+        max_centroid_diff = np.inf
+        while i < max_iter and max_centroid_diff > tol:
             self.data_centroid_labels = self.update_labels(self.centroids)
             self.inertia = self.compute_inertia()
 
-            new_centroids, centroid_diff = self.update_centroids(k=k,data_centroid_labels=self.data_centroid_labels,prev_centroids=self.centroids)
+            new_centroids, centroid_diff = self.update_centroids(k=k, data_centroid_labels=self.data_centroid_labels,
+                                                                 prev_centroids=self.centroids)
             self.centroids = new_centroids
-            if np.max(centroid_diff).all() < tol:
-                if verbose:
-                    print(f"{i} Iterations")
-                return self.inertia, i
 
-        #TODO maybe update self.dataframe here
+            max_centroid_diff = np.max(np.sum(centroid_diff,axis=1))
 
-        return self.inertia, max_iter
-    def cluster_batch(self, k=2, n_iter=1, verbose=False):
+            # increment i
+            i += 1
+
+        return self.inertia, i
+
+        # #TODO maybe update self.dataframe here
+        #
+        # return self.inertia, max_iter
+
+    def cluster_batch(self, k=2, n_iter=1,  tol=1e-2, max_iter=1000, verbose=False, init_method = 'range'):
         '''Run K-means multiple times, each time with different initial conditions.
         Keeps track of K-means instance that generates lowest inertia. Sets the following instance
         variables based on the best K-mean run:
@@ -221,7 +233,18 @@ class KMeans():
         n_iter: int. Number of times to run K-means with the designated `k` value.
         verbose: boolean. Print out debug information if set to True.
         '''
-        pass
+
+        # initialize best distance value to a large value
+        best_intertia = np.inf
+        for i in range(n_iter):
+            intertia_kmeans, number_of_iters = self.cluster(k,tol=tol, max_iter=max_iter,verbose=verbose,init_method=init_method)
+            if intertia_kmeans < best_intertia:
+                best_intertia = intertia_kmeans
+                best_centroids = self.centroids
+                best_data_labels = self.data_centroid_labels
+
+        self.centroids = best_centroids
+        self.data_centroid_labels = best_data_labels
 
     def update_labels(self, centroids):
         '''Assigns each data sample to the nearest centroid
@@ -272,7 +295,7 @@ class KMeans():
 
             if data_with_label.size == self.num_features:
                 new_centroid = data_with_label
-            elif data_with_label.size:
+            else:
                 new_centroid = data_with_label.mean(axis=0)
             new_centroids.append(new_centroid)
             #TODO maybe no abs for better speed since it is very computationaly intensive
@@ -349,7 +372,7 @@ class KMeans():
         #     axes.legend([f'Group {i+1}' for i in np.arange(np.unique(self.data_centroid_labels).size)])
         return fig, axes
 
-    def elbow_plot(self, max_k, title = '',fig_sz = (8,8), font_size = 10):
+    def elbow_plot(self, max_k, title = '',fig_sz = (8,8), font_size = 10, cluster_method = 'single', batch_iters = 20):
         '''Makes an elbow plot: cluster number (k) on x axis, inertia on y axis.
 
         Parameters:
@@ -368,7 +391,14 @@ class KMeans():
         #do all the k-means
         cluster_results = []
         for i in k_s:
-            cluster_results.append(self.cluster(k=i))
+            if cluster_method == 'single':
+                cluster_results.append(self.cluster(k=i))
+            elif cluster_method == 'batch':
+                self.cluster_batch(k = i,n_iter=batch_iters)
+                cluster_results.append(self.get_inertia())
+            else:
+                print(f'Error! cluster_method needs to be single or batch\nCurrently it is {cluster_method}')
+                raise ValueError
 
         cluster_results = np.array(cluster_results)
         k_means_interia = cluster_results[:,0]
@@ -376,6 +406,7 @@ class KMeans():
 
 
         axes.plot(k_s,k_means_interia)
+        axes.set_xticks(k_s)
         axes.set_xlabel('Cluster(s)',fontsize = font_size)
         axes.set_ylabel('Inertia')
         axes.set_title(title)
@@ -393,4 +424,4 @@ class KMeans():
         -----------
         None
         '''
-        pass
+        print(f'enteref replacve with cluster')
