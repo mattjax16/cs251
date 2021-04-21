@@ -34,15 +34,29 @@ cluster = kmeans.KMeans(super_simple)
 test_k = 3
 init_centroids = cluster.initialize(test_k)
 print(f'Initial cluster centroids shape is:\n{init_centroids.shape} and should be (3, 2)')
-#%%
 
-# Consistently set initial centroids for test
-init_centroids = np.array([[ 0.338, 4.4672], [-1.8401, 3.1123], [1.7931, 0.5427]])
 
-new_labels = cluster.update_labels(init_centroids)
-print(f'After the first update data label step, 1st 10 of your cluster assignments are:\n{new_labels[:10]}')
-print('Your 1st 10 cluster assignments should be:\n[0 1 1 1 2 0 2 1 2 1]')
+# # Consistently set initial centroids for test
+# init_centroids = np.array([[ 0.338, 4.4672], [-1.8401, 3.1123], [1.7931, 0.5427]])
+#
+# new_labels = cluster.update_labels(init_centroids)
+# print(f'After the first update data label step, 1st 10 of your cluster assignments are:\n{new_labels[:10]}')
+# print('Your 1st 10 cluster assignments should be:\n[0 1 1 1 2 0 2 1 2 1]')
+#
+# new_centroids, diff_from_prev_centroids = cluster.update_centroids(test_k, new_labels, init_centroids)
+# print(f'After the first centroid update, your cluster assignments are:\n{new_centroids}')
+# print(f'Your difference from previous centroids:\n{diff_from_prev_centroids}')
+np.random.seed(0)
+cluster.cluster(k = 3)
+cluster.plot_clusters()
+plt.show()
 
-new_centroids, diff_from_prev_centroids = cluster.update_centroids(test_k, new_labels, init_centroids)
-print(f'After the first centroid update, your cluster assignments are:\n{new_centroids}')
-print(f'Your difference from previous centroids:\n{diff_from_prev_centroids}')
+
+
+cluster.elbow_plot(30,title = f'Number of Ks for Simple Data\nEffect on Inertia')
+plt.show()
+
+
+
+cluster.elbow_plot(8,title = f'Number of Ks for Simple Data\nEffect on Inertia')
+plt.show()

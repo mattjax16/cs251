@@ -133,7 +133,7 @@ class KMeans():
         return centroid_dist_array
 
 
-    def initialize(self, k, init_method = 'points'):
+    def initialize(self, k, init_method = 'range'):
         '''Initializes K-means by setting the initial centroids (means) to K unique randomly
         selected data samples
 
@@ -198,11 +198,11 @@ class KMeans():
             self.inertia = self.compute_inertia()
 
             new_centroids, centroid_diff = self.update_centroids(k=k,data_centroid_labels=self.data_centroid_labels,prev_centroids=self.centroids)
+            self.centroids = new_centroids
             if np.max(centroid_diff).all() < tol:
                 if verbose:
                     print(f"{i} Iterations")
                 return self.inertia, i
-            self.centroids = new_centroids
 
         #TODO maybe update self.dataframe here
 
@@ -270,9 +270,9 @@ class KMeans():
 
             data_with_label = np.squeeze(self.data[data_group_indicies,:])
 
-            if data_with_label.ndim == 1:
+            if data_with_label.size == self.num_features:
                 new_centroid = data_with_label
-            else:
+            elif data_with_label.size:
                 new_centroid = data_with_label.mean(axis=0)
             new_centroids.append(new_centroid)
             #TODO maybe no abs for better speed since it is very computationaly intensive
@@ -349,7 +349,7 @@ class KMeans():
         #     axes.legend([f'Group {i+1}' for i in np.arange(np.unique(self.data_centroid_labels).size)])
         return fig, axes
 
-    def elbow_plot(self, max_k, title = '',fig_sz = (8,8)):
+    def elbow_plot(self, max_k, title = '',fig_sz = (8,8), font_size = 10):
         '''Makes an elbow plot: cluster number (k) on x axis, inertia on y axis.
 
         Parameters:
@@ -366,12 +366,19 @@ class KMeans():
 
         k_s = np.arange(max_k) + 1
         #do all the k-means
-        k_means_interia = [self.cluster(i)[0] for i in k_s]
-        axes.plot(k_means_interia)
-        axes.set_xlabel('Cluster(s)')
+        cluster_results = []
+        for i in k_s:
+            cluster_results.append(self.cluster(k=i))
+
+        cluster_results = np.array(cluster_results)
+        k_means_interia = cluster_results[:,0]
+
+
+
+        axes.plot(k_s,k_means_interia)
+        axes.set_xlabel('Cluster(s)',fontsize = font_size)
         axes.set_ylabel('Inertia')
         axes.set_title(title)
-        plt.show()
         return fig,axes
 
     def replace_color_with_centroid(self):
