@@ -2,7 +2,7 @@ import concurrent.futures
 import time
 import numpy as np
 import tensorflow as tf
-
+import cupy as cp
 import time
 # start = time.perf_counter()
 #
@@ -24,19 +24,22 @@ import time
 #
 # print(f'Finished in {round(finish-start, 2)} second(s)')
 
-gpu_devices = tf.config.list_physical_devices('GPU')
-for device in gpu_devices:
-    tf.config.experimental.set_memory_growth(device, True)
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+# gpu_devices = tf.config.list_physical_devices('GPU')
+# for device in gpu_devices:
+#     tf.config.experimental.set_memory_growth(device, True)
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth = True
+# tf.compat.v1.InteractiveSession(config=config)
+# print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-### Numpy and CPU
-s = time.time()
-x_cpu = np.ones((1000,1000,1000))
-e = time.time()
-print(e - s)
-
-# ### CuPy and GPU
-s = time.time()
-x_gpu = tf.Variable(np.ones((1000,1000,1000)))
-e = time.time()
-print(e - s)
+# ### Numpy and CPU
+# s = time.time()
+# x_cpu = np.ones((1920,1080,3))
+# e = time.time()
+# print(e - s)
+#
+# # ### CuPy and GPU
+# s = time.time()
+# x_gpu = cp.ones((1920,1080,3))
+# e = time.time()
+# print(e - s)

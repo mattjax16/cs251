@@ -9,9 +9,10 @@ from palettable import cartocolors
 import palettable
 import concurrent.futures
 import pandas as pd
+import cupy as cp
 
-class KMeans():
-    def __init__(self, data=None):
+class KMeansGPU():
+    def __init__(self, data=None, use_gpu=True):
         '''KMeans constructor
 
         (Should not require any changes)
@@ -35,7 +36,7 @@ class KMeans():
         self.inertia = None
 
         # data: ndarray. shape=(num_samps, num_features)
-        self.data = data.astype('float64')
+        self.data = data
         # num_samps: int. Number of samples in the dataset
         self.num_samps = None
         # num_features: int. Number of features (variables) in the dataset
@@ -44,8 +45,38 @@ class KMeans():
         #each datas distance from the centroid
         self.data_dist_from_centroid = None
 
+        #holds whether the array in a numpy or cumpy array
+        self.xp = None
+
         if data is not None:
+            self.array_module = cp.get_array_module(data)
+            if use_gpu:
+                if self.xp == np:
+                    data = cp.asarray(data)
+            else:
+                if self.xp == cp:
+                    data = cp.asnumpy(data)
+
+            self.set_data(data)
             self.num_samps, self.num_features = data.shape
+
+
+        # Making Cuda Kernal Functions for increased speed on gpu
+        # learned how to thanks to Cupy documentation!
+        # https://readthedocs.org/projects/cupy/downloads/pdf/stable/
+
+        #making kernal functions for different l Norms (distances)
+
+        #L2 (euclidien distance kernal)
+        l2norm_kernel = cp.ReductionKernel(
+            'T x', 'T y',  # generic inputs and output arrays
+            'x * x',  # map function
+            'a + b',  # reduce
+            'y = sqrt(a)',  # post-reduction map
+            '0',  # identity value
+            'l2norm'  # kernel name
+        )
+
 
 
 
@@ -60,9 +91,14 @@ class KMeans():
         -----------
         data: ndarray. shape=(num_samps, num_features)
         '''
+
+        #make sure the data is 2 dimensions
+        assert data.ndim == 2
+
         self.data = data
-        self.num_samps = data.values.shape[0]
-        self.num_features = data.values.shape[1]
+        self.num_samps = data.shape[0]
+        self.num_features = data.shape[1]
+        self.xp = cp.get_array_module(data)
 
     def get_data(self):
         '''Get a COPY of the data
@@ -72,7 +108,7 @@ class KMeans():
         ndarray. shape=(num_samps, num_features). COPY of the data
         '''
 
-        return np.copy(self.data)
+        return self.xp.copy(self.data)
 
     def get_inertia(self):
         return  self.inertia
@@ -117,12 +153,12 @@ class KMeans():
         if method == 'L2':
             pt_1 = pt_1.reshape(1,pt_1.size)
             pt_2 = pt_2.reshape(1, pt_2.size)
-            euclid_dist = np.sqrt(np.sum((pt_1-pt_2)*(pt_1-pt_2),axis=1))
+            euclid_dist = self.xp.sqrt(self.xp.sum((pt_1-pt_2)*(pt_1-pt_2),axis=1))
             return euclid_dist[0]
         elif method == 'L1':
             pt_1 = pt_1.reshape(1, pt_1.size)
             pt_2 = pt_2.reshape(1, pt_2.size)
-            manhat_dist = np.sum(np.abs(pt_1-pt_2))
+            manhat_dist = self.xp.sum(self.xp.abs(pt_1-pt_2))
             return manhat_dist
 
     def dist_pt_to_centroids(self, pt, centroids = None, method = 'L2'):
@@ -148,15 +184,15 @@ class KMeans():
 
         if isinstance(centroids,type(None)):
             if method == 'L2':
-                centroid_dist_array = np.sqrt(np.sum((pt - self.centroids) * (pt - self.centroids), axis=1))
+                centroid_dist_array = self.xp.sqrt(self.xp.sum((pt - self.centroids) * (pt - self.centroids), axis=1))
             elif method == 'L1':
-                centroid_dist_array = np.sum(np.abs(pt-self.centroids),axis=1)
+                centroid_dist_array = self.xp.sum(self.xp.abs(pt-self.centroids),axis=1)
         else:
             if method == 'L2':
-                centroid_dist_array = np.sqrt(np.sum((pt - centroids) * (pt - centroids), axis=1))
+                centroid_dist_array = self.xp.sqrt(self.xp.sum((pt - centroids) * (pt - centroids), axis=1))
             elif method == 'L1':
                 centroid_dist_array = pt-centroids
-                centroid_dist_array = np.sum( centroid_dist_array,axis=1)
+                centroid_dist_array = self.xp.sum( centroid_dist_array,axis=1)
         return centroid_dist_array
 
 
@@ -176,35 +212,35 @@ class KMeans():
         '''
         if init_method == 'range':
 
-            maxs = np.max(self.data,axis = 0)
-            mins = np.min(self.data,axis = 0)
-            starting_centroids = np.random.uniform(mins,maxs, size = (k,mins.size))
+            maxs = self.xp.max(self.data,axis = 0)
+            mins = self.xp.min(self.data,axis = 0)
+            starting_centroids = self.xp.random.uniform(mins,maxs, size = (k,mins.size))
         elif init_method == 'points':
 
-            starting_centroid_point_indicies = np.random.choice(np.arange(self.data.shape[0]), replace = False,size = k)
+            starting_centroid_point_indicies = self.xp.random.choice(self.xp.arange(self.data.shape[0]), replace = False,size = k)
             starting_centroids = self.data[starting_centroid_point_indicies,:]
         elif init_method == '++':
             if len(self.data.shape) > 1:
-                starting_centroids = np.ndarray((k, self.data.shape[1]))
+                starting_centroids = self.xp.ndarray((k, self.data.shape[1]))
             else:
-                starting_centroids = np.ndarray((k, 1))
+                starting_centroids = self.xp.ndarray((k, 1))
             for i in range(k):
                 if i == 0:
-                    starting_centroids[i, :] = self.data[np.random.randint(self.data.shape[0])]
+                    starting_centroids[i, :] = self.data[self.xp.random.randint(self.data.shape[0])]
 
                 else:
                     if distance_calc_method == 'L2':
                         if matix_mult_dist_calc:
                             data_distance_from_centroids = -2 * self.data @ starting_centroids[:i,:].T + (self.data * self.data).sum(axis=-1)[:, None] + \
                                                            (starting_centroids[:i,:] * starting_centroids[:i,:]).sum(axis=-1)[None]
-                            data_distance_from_centroids = np.sqrt(np.abs(data_distance_from_centroids))
+                            data_distance_from_centroids = self.xp.sqrt(self.xp.abs(data_distance_from_centroids))
                         else:
-                            data_distance_from_centroids = np.apply_along_axis(func1d=self.dist_pt_to_centroids,
+                            data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
                                                                            axis=1, arr=self.data, centroids=starting_centroids[:i,:],
                                                                            method='L2')
                     probs = data_distance_from_centroids / data_distance_from_centroids.sum()
-                    cumprobs = np.sum(probs,axis = 1)
-                    starting_centroids[i, :] = self.data[np.random.choice(np.arange(self.data.shape[0]), p=cumprobs),:]
+                    cumprobs = self.xp.sum(probs,axis = 1)
+                    starting_centroids[i, :] = self.data[self.xp.random.choice(self.xp.arange(self.data.shape[0]), p=cumprobs),:]
 
         else:
             print(f'Error Method needs to be "range" or "points" currently it is {init_method}')
@@ -245,7 +281,7 @@ class KMeans():
 
         #do K-means untils distance less than thresh-hold or max ittters reached
         i = 0
-        max_centroid_diff = np.inf
+        max_centroid_diff = self.xp.inf
         #TODO add a way to store values from update labels so inertia is easier to calculate
         while i < max_iter and max_centroid_diff > tol:
 
@@ -259,7 +295,7 @@ class KMeans():
                                                                  prev_centroids=self.centroids,distance_calc_method = distance_calc_method)
             self.centroids = new_centroids
 
-            max_centroid_diff = np.max(np.sum(centroid_diff,axis=1))
+            max_centroid_diff = self.xp.max(self.xp.sum(centroid_diff,axis=1))
 
             # increment i
             i += 1
@@ -286,7 +322,7 @@ class KMeans():
         '''
 
         # initialize best distance value to a large value
-        best_intertia = np.inf
+        best_intertia = self.xp.inf
         for i in range(n_iter):
             intertia_kmeans, number_of_iters = self.cluster(k,tol=tol, max_iter=max_iter,verbose=verbose,
                                                             init_method=init_method,distance_calc_method=distance_calc_method)
@@ -316,37 +352,32 @@ class KMeans():
         '''
         data_distance_from_centroids = []
         if multiProcess:
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                data_to_calc = self.data
-                dist_multi_process = executor.map(lambda x : np.argmin(self.dist_pt_to_centroids(x)) , self.data)
-                for distance_result in dist_multi_process:
-                    print(distance_result)
-
-                data_distance_from_centroids = np.array(data_distance_from_centroids)
-                labels = np.argmin(data_distance_from_centroids, axis = 1)
-                return labels
+            pass
         else:
 
-            #Credit to this paper for the idea of the matrix method
+            # Credit to this paper for the idea of the matrix method
             # https://www.robots.ox.ac.uk/~albanie/notes/Euclidean_distance_trick.pdf
             # and https://medium.com/@souravdey/l2-distance-matrix-vectorization-trick-26aa3247ac6c
             if distance_calc_method == 'L2':
-                if matix_mult_dist_calc:
-                    data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[:, None] + \
-                                                (centroids * centroids).sum(axis=-1)[None]
+                if self.xp == np:
+                    data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[
+                                                                                  :, None] + \
+                                                   (centroids * centroids).sum(axis=-1)[None]
                     data_distance_from_centroids = np.sqrt(np.abs(data_distance_from_centroids))
+
+                #else if it is Cupy Gpu bases
                 else:
-                    data_distance_from_centroids = np.apply_along_axis(func1d = self.dist_pt_to_centroids,
-                                                               axis = 1, arr = self.data, centroids = centroids, method = 'L2')
+
+                pass
             elif distance_calc_method == 'L1':
-                data_distance_from_centroids = np.apply_along_axis(func1d=self.dist_pt_to_centroids,
+                data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
                                                                   axis=1, arr=self.data, centroids=centroids,
                                                                   method='L1')
-                data_distance_from_centroids = np.abs(data_distance_from_centroids)
+                data_distance_from_centroids = self.xp.abs(data_distance_from_centroids)
 
             data_distance_from_centroids = data_distance_from_centroids.reshape(data_distance_from_centroids.shape[0],centroids.shape[0])
-            labels = np.argmin(data_distance_from_centroids, axis = 1)
-            self.data_dist_from_centroid = np.min(data_distance_from_centroids, axis = 1)
+            labels = self.xp.argmin(data_distance_from_centroids, axis = 1)
+            self.data_dist_from_centroid = self.xp.min(data_distance_from_centroids, axis = 1)
             return labels
 
     def update_centroids(self, k, data_centroid_labels, prev_centroids, distance_calc_method = 'L2'):
@@ -372,10 +403,10 @@ class KMeans():
 
         new_centroids = []
         centroid_diff = []
-        for centroid_label, prev_centroid in zip(np.arange(k), prev_centroids):
-            data_group_indicies = np.where(data_centroid_labels == centroid_label)
+        for centroid_label, prev_centroid in zip(self.xp.arange(k), prev_centroids):
+            data_group_indicies = self.xp.where(data_centroid_labels == centroid_label)
 
-            data_with_label = np.squeeze(self.data[data_group_indicies,:])
+            data_with_label = self.xp.squeeze(self.data[data_group_indicies,:])
 
             #TODO not sure if thius is proper way to handle when a centroid has not data label
             # if some cluster appeared to be empty then:
@@ -392,8 +423,8 @@ class KMeans():
             #TODO maybe no abs for better speed since it is very computationaly intensive
             centroid_diff.append(abs(new_centroid - prev_centroid))
 
-        new_centroids = np.array(new_centroids, dtype= np.float64 )
-        centroid_diff = np.array(centroid_diff, dtype= np.float64)
+        new_centroids = self.xp.array(new_centroids, dtype= self.xp.float64 )
+        centroid_diff = self.xp.array(centroid_diff, dtype= self.xp.float64)
         return new_centroids, centroid_diff
 
     def compute_inertia(self ,distance_calc_method = 'L2'):
@@ -428,7 +459,7 @@ class KMeans():
         #             centroid_sum = np.sum(centroid_sum)
         #     sum_dist_of_centroids.append(centroid_sum)
 
-        intertia = np.sum(self.data_dist_from_centroid)/self.num_samps
+        intertia = self.xp.sum(self.data_dist_from_centroid)/self.num_samps
 
         return intertia
 
@@ -494,12 +525,12 @@ class KMeans():
         #set up plot
         fig, axes = plt.subplots(1,1,figsize =fig_sz)
 
-        k_s = np.arange(max_k) + 1
+        k_s = self.xp.arange(max_k) + 1
         #do all the k-means
         cluster_results = []
         for i in k_s:
             if cluster_method == 'single':
-                cluster_results.append(np.array(self.cluster(k=i,distance_calc_method = distance_calc_method,max_iter=max_iter, init_method = init_method)))
+                cluster_results.append(self.xp.array(self.cluster(k=i,distance_calc_method = distance_calc_method,max_iter=max_iter, init_method = init_method)))
             elif cluster_method == 'batch':
                 self.cluster_batch(k = i,n_iter=batch_iters,distance_calc_method=distance_calc_method,max_iter=max_iter, init_method = init_method)
                 cluster_results.append(self.get_inertia())
@@ -507,7 +538,7 @@ class KMeans():
                 print(f'Error! cluster_method needs to be single or batch\nCurrently it is {cluster_method}')
                 raise ValueError
 
-        cluster_results = np.array(cluster_results)
+        cluster_results = self.xp.array(cluster_results)
         if cluster_method == 'batch':
             k_means_interia = cluster_results
         else:
@@ -534,7 +565,7 @@ class KMeans():
         None
         '''
 
-        self.data = np.array([self.centroids[label] for label in self.data_centroid_labels]).astype('int64')
+        self.data = self.xp.array([self.centroids[label] for label in self.data_centroid_labels]).astype('int64')
 
 
 
@@ -548,7 +579,7 @@ class KMeans():
         largest_centroid = self.centroids[largest_centroid_label]
         largest_centroid = largest_centroid.reshape(largest_centroid.size,1)
         #TODO clean up
-        data_distance_from_centroid = np.apply_along_axis(func1d=self.dist_pt_to_pt,
+        data_distance_from_centroid = self.xp.apply_along_axis(func1d=self.dist_pt_to_pt,
                                                            axis=1, arr=data_in_largest_centroid, pt_2=largest_centroid,
                                                           method = distance_calc_method)
 
@@ -557,7 +588,7 @@ class KMeans():
         data_with_greatest_distance = self.data[data_with_greatest_distance_index]
 
         #return the point with the greatest distance
-        data_index = np.where(self.data == data_with_greatest_distance)
+        data_index = self.xp.where(self.data == data_with_greatest_distance)
         data_index_series = pd.Series(data_index[0])
         data_index_count = data_index_series.value_counts()
         data_index_check = self.data[data_index[0]]
