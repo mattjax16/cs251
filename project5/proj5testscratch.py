@@ -33,119 +33,172 @@ def flatten(img):
 
 intense_m29_img = plt.imread('https://p.vitalmtb.com/photos/products/28620/photos/54903/s1600_photo_734056.jpg?1578283962', 'jpg')
 flatten_intense_m29 = flatten(intense_m29_img)
-flatten_intense_m29_f32 = np.float32(flatten_intense_m29)
-
-blue_bird_img = plt.imread('data/baby_bird.jpeg')
-blue_bird_flattened = flatten(blue_bird_img)
-blue_bird_flattened_32 = np.float32(blue_bird_flattened)
-
-## CV
-criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-retCv, labelCV, centerCV = cv2.kmeans(blue_bird_flattened_32,6, None, criteria, 10,cv2.KMEANS_RANDOM_CENTERS)
 
 
-
-m29_cluster = kmeans.KMeans(flatten_intense_m29)
-
-
-# s = time.time()
-# m29_cluster.cluster_batch(k = 5, n_iter=1, max_iter=5)
-# e = time.time()
-# print(e - s)
-#
-#
 m29_cluster_gpu = kmeansGPU.KMeansGPU(flatten_intense_m29)
-# s = time.time()
-# m29_cluster_gpu.cluster_batch(k = 5, n_iter=1, max_iter=5)
-# e = time.time()
-# print(e - s)
-
-
-m29_gpu_data = m29_cluster_gpu.get_data()
-m29_gpu_centroids = m29_cluster_gpu.initialize(2, init_method='++')
-# m29_gpu_labels = m29_cluster_gpu.update_labels(m29_gpu_centroids)
-# m29_gpu_centroids, m29_gpu_centroid_dif = m29_cluster_gpu.update_centroids(2,m29_gpu_labels,m29_gpu_centroids)
+m29_cluster = kmeans.KMeans(flatten_intense_m29)
 
 
 five_blobs = pd.read_csv('data/five_blobs.csv')
 five_blobs_cluster_gpu = kmeansGPU.KMeansGPU(five_blobs.values)
-five_blobs_data = five_blobs_cluster_gpu.get_data()
-five_blobs_centroids = five_blobs_cluster_gpu.initialize(5, init_method='++')
-
-t_cp_centers, t_cp_pred = kmeansCupyEx.fit_custom(five_blobs_data,5,40)
-
-'''Kernal Testing'''
-l2norm_kernel = cp.ReductionKernel(
-'T x',  # input params
-'T y',  # output params
-'x * x',  # map
-'a + b',  # reduce
-'y = sqrt(a)',  # post-reduction map
-'0',  # identity value
-'l2norm'  # kernel name
-)
+five_blobs_cluster_gpu.cluster(5)
 
 
-var_kernel = cp.ElementwiseKernel(
-    'T x0, T x1, T c0, T c1', 'T out',
-    'out = (x0 - c0) * (x0 - c0) + (x1 - c1) * (x1 - c1)',
-    'var_kernel'
-)
-sum_kernel = cp.ReductionKernel(
-    'T x, S mask', 'T out',
-    'mask ? x : 0',
-    'a + b', 'out = a', '0',
-    'sum_kernel'
-)
-count_kernel = cp.ReductionKernel(
-    'T mask', 'float32 out',
-    'mask ? 1.0 : 0.0',
-    'a + b', 'out = a', '0.0',
-    'count_kernel'
-)
+s = time.time()
+m29_cluster_gpu.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
+e = time.time()
+print(e - s)
 
-fit_calc_distances = cp.ElementwiseKernel(
-    'S data , raw S centers, int32 n_clusters, int32 dim', 'raw S dist',
-    '''
-    for (int j = 0; j < n_clusters; j++){
-        int cent_ind[] = {j , i % dim};
-        int dist_ind[] = {i/dim,j};
-        double diff = centers[cent_ind] - data;
-        atomicAdd(&dist[dist_ind],diff * diff);
-    }
-    ''',
-    'calc_distances'
-)
-
-x = cp.arange(10, dtype='f').reshape(5, 2)
-
-zzz_dist = cp.zeros((five_blobs_data.shape[0], 5), dtype ='int32')
-l2_kernal_res = fit_calc_distances(cp.asarray(cp.int32(five_blobs_data)),cp.asarray(cp.int32(five_blobs_centroids))
-                                   ,cp.int32(5),cp.int32(2), zzz_dist)
+s = time.time()
+m29_cluster.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
+e = time.time()
+print(e - s)
 
 
 
 
+s = time.time()
+m29_cluster_gpu.cluster(5)
+e = time.time()
+print(e - s)
+
+s = time.time()
+m29_cluster.cluster(5)
+e = time.time()
+print(e - s)
+
+print(f'Done with L2')
+
+s = time.time()
+m29_cluster_gpu.cluster(5,distance_calc_method='L1')
+e = time.time()
+print(e - s)
+
+s = time.time()
+m29_cluster.cluster(5,distance_calc_method='L1')
+e = time.time()
+print(e - s)
+
+print(f'Done with L1')
 
 
-zzz_dist2 = cp.zeros((m29_gpu_data.shape[0], 5), dtype ='int32')
-l2_kernal_res3 = fit_calc_distances(cp.asarray(cp.int32(m29_gpu_data)),cp.asarray(cp.int32(m29_gpu_centroids))
-                                   ,cp.int32(5),cp.int32(3), zzz_dist2)
+# m29_cluster_gpu.cluster(5)
+#
+#
+# flatten_intense_m29_f32 = np.float32(flatten_intense_m29)
+#
+# blue_bird_img = plt.imread('data/baby_bird.jpeg')
+# blue_bird_flattened = flatten(blue_bird_img)
+# blue_bird_flattened_32 = np.float32(blue_bird_flattened)
+#
+# ## CV
+# criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+# retCv, labelCV, centerCV = cv2.kmeans(blue_bird_flattened_32,6, None, criteria, 10,cv2.KMEANS_RANDOM_CENTERS)
+#
+#
+#
+# m29_cluster = kmeans.KMeans(flatten_intense_m29)
+#
+#
+# # s = time.time()
+# # m29_cluster.cluster_batch(k = 5, n_iter=1, max_iter=5)
+# # e = time.time()
+# # print(e - s)
+# #
+# #
+# m29_cluster_gpu = kmeansGPU.KMeansGPU(flatten_intense_m29)
+# # s = time.time()
+# # m29_cluster_gpu.cluster_batch(k = 5, n_iter=1, max_iter=5)
+# # e = time.time()
+# # print(e - s)
+#
+#
+# m29_gpu_data = m29_cluster_gpu.get_data()
+# m29_gpu_centroids = m29_cluster_gpu.initialize(2, init_method='++')
+# # m29_gpu_labels = m29_cluster_gpu.update_labels(m29_gpu_centroids)
+# # m29_gpu_centroids, m29_gpu_centroid_dif = m29_cluster_gpu.update_centroids(2,m29_gpu_labels,m29_gpu_centroids)
+#
+#
+# five_blobs = pd.read_csv('data/five_blobs.csv')
+# five_blobs_cluster_gpu = kmeansGPU.KMeansGPU(five_blobs.values)
+# five_blobs_data = five_blobs_cluster_gpu.get_data()
+# five_blobs_centroids = five_blobs_cluster_gpu.initialize(5, init_method='++')
+#
+# t_cp_centers, t_cp_pred = kmeansCupyEx.fit_custom(five_blobs_data,5,40)
+#
+# '''Kernal Testing'''
+# l2norm_kernel = cp.ReductionKernel(
+# 'T x',  # input params
+# 'T y',  # output params
+# 'x * x',  # map
+# 'a + b',  # reduce
+# 'y = sqrt(a)',  # post-reduction map
+# '0',  # identity value
+# 'l2norm'  # kernel name
+# )
+#
+#
+# var_kernel = cp.ElementwiseKernel(
+#     'T x0, T x1, T c0, T c1', 'T out',
+#     'out = (x0 - c0) * (x0 - c0) + (x1 - c1) * (x1 - c1)',
+#     'var_kernel'
+# )
+# sum_kernel = cp.ReductionKernel(
+#     'T x, S mask', 'T out',
+#     'mask ? x : 0',
+#     'a + b', 'out = a', '0',
+#     'sum_kernel'
+# )
+# count_kernel = cp.ReductionKernel(
+#     'T mask', 'float32 out',
+#     'mask ? 1.0 : 0.0',
+#     'a + b', 'out = a', '0.0',
+#     'count_kernel'
+# )
+#
+# fit_calc_distances = cp.ElementwiseKernel(
+#     'S data , raw S centers, int32 n_clusters, int32 dim', 'raw S dist',
+#     '''
+#     for (int j = 0; j < n_clusters; j++){
+#         int cent_ind[] = {j , i % dim};
+#         int dist_ind[] = {i/dim,j};
+#         double diff = centers[cent_ind] - data;
+#         atomicAdd(&dist[dist_ind],diff * diff);
+#     }
+#     ''',
+#     'calc_distances'
+# )
+#
+# x = cp.arange(10, dtype='f').reshape(5, 2)
+#
+# zzz_dist = cp.zeros((five_blobs_data.shape[0], 5), dtype ='int32')
+# l2_kernal_res = fit_calc_distances(cp.asarray(cp.int32(five_blobs_data)),cp.asarray(cp.int32(five_blobs_centroids))
+#                                    ,cp.int32(5),cp.int32(2), zzz_dist)
+#
+#
+#
+#
+#
+#
+# zzz_dist2 = cp.zeros((m29_gpu_data.shape[0], 5), dtype ='int32')
+# l2_kernal_res3 = fit_calc_distances(cp.asarray(cp.int32(m29_gpu_data)),cp.asarray(cp.int32(m29_gpu_centroids))
+#                                    ,cp.int32(5),cp.int32(3), zzz_dist2)
+#
+#
+#
+#
+#
+# zzz_dist3 = cp.zeros((m29_gpu_data.shape[0], 5), dtype ='float64')
+#
+# test_x_1 = m29_gpu_data[:,None,:]
+# test_x_2 = m29_gpu_centroids[None,:,:]
+#
+# final_x_2 = test_x_1 - test_x_2
+# final_x_2 = cp.asarray(final_x_2)
+# zzz_dist3 = l2norm_kernel(final_x_2,axis = 2)
+#
 
-
-
-
-zzz_dist3 = cp.zeros((m29_gpu_data.shape[0], 5), dtype ='float64')
-
-test_x_1 = m29_gpu_data[:,None,:]
-test_x_2 = m29_gpu_centroids[None,:,:]
-
-final_x_2 = test_x_1 - test_x_2
-final_x_2 = cp.asarray(final_x_2)
-zzz_dist3 = l2norm_kernel(final_x_2,axis = 2)
-
-
-print('Done Testing Cupy Kernals')
+# print('Done Testing Cupy Kernals')
 
 
 

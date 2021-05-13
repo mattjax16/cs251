@@ -12,7 +12,7 @@ import pandas as pd
 import cupy as cp
 
 class KMeansGPU():
-    def __init__(self, data=None, use_gpu=True):
+    def __init__(self, data=None, use_gpu=True, data_type = 'float64'):
         '''KMeans constructor
 
         (Should not require any changes)
@@ -48,14 +48,32 @@ class KMeansGPU():
         #holds whether the array in a numpy or cumpy array
         self.xp = None
 
+
+        #holds the type the data should be
+        self.set_data_type = None
+
+        #holds the type of the original data
+        self.original_data_type = None
+
+
+        #holds wether gpu is being used or not
+        self.use_gpu = use_gpu
+
         if data is not None:
-            self.array_module = cp.get_array_module(data)
+            self.xp = cp.get_array_module(data)
             if use_gpu:
                 if self.xp == np:
                     data = cp.asarray(data)
             else:
                 if self.xp == cp:
                     data = cp.asnumpy(data)
+
+
+            #get the original data type of the data matrix
+            self.original_data_type = data.dtype
+
+            #make data passed in data type
+            self.set_data_type = data_type
 
             self.set_data(data)
             self.num_samps, self.num_features = data.shape
@@ -68,15 +86,33 @@ class KMeansGPU():
         #making kernal functions for different l Norms (distances)
 
         #L2 (euclidien distance kernal)
-        l2norm_kernel = cp.ReductionKernel(
-            'T x', 'T y',  # generic inputs and output arrays
-            'x * x',  # map function
-            'a + b',  # reduce
-            'y = sqrt(a)',  # post-reduction map
-            '0',  # identity value
-            'l2norm'  # kernel name
+        self.euclidean_dist_kernel = cp.ReductionKernel(
+            in_params = 'T x', out_params = 'T y', map_expr='x * x',  reduce_expr='a + b',
+            post_map_expr= 'y = sqrt(a)',  identity='0',  name='euclidean'
         )
 
+        # L1 (manhattan distance kernal)
+        self.manhattan_dist_kernel = cp.ReductionKernel(
+            in_params='T x', out_params='T y', map_expr='abs(x)', reduce_expr='a + b',
+            post_map_expr='y = a', identity='0', name='manhattan'
+        )
+
+
+        # these next 2 kerneals are used to get the mean of a cluster of data
+        # (update the centroids)
+
+        # gets the sum of a matrix based off of one hot encoding
+        self.sum_kernal = cp.ReductionKernel(
+            in_params = 'T x, S oneHotCode', out_params ='T result',
+            map_expr= 'oneHotCode ? x : 0.0' , reduce_expr='a + b',post_map_expr= 'result = a' ,identity='0', name= 'sum_kernal'
+        )
+
+        # gets the count of a matrix from one hot encoding (by booleans)
+        #TODO make a class variable to hold data type of data set
+        self.count_kernal = cp.ReductionKernel(
+            in_params='T oneHotCode', out_params='float32 result',
+            map_expr='oneHotCode ? 1.0 : 0.0', reduce_expr='a + b', post_map_expr='result = a' ,identity='0', name='count_kernal'
+        )
 
 
 
@@ -95,7 +131,7 @@ class KMeansGPU():
         #make sure the data is 2 dimensions
         assert data.ndim == 2
 
-        self.data = data
+        self.data = data.astype(self.set_data_type)
         self.num_samps = data.shape[0]
         self.num_features = data.shape[1]
         self.xp = cp.get_array_module(data)
@@ -217,30 +253,104 @@ class KMeansGPU():
             starting_centroids = self.xp.random.uniform(mins,maxs, size = (k,mins.size))
         elif init_method == 'points':
 
-            starting_centroid_point_indicies = self.xp.random.choice(self.xp.arange(self.data.shape[0]), replace = False,size = k)
-            starting_centroids = self.data[starting_centroid_point_indicies,:]
+            data_as_np = cp.asnumpy(self.data)
+            unique_data_samples = np.unique(data_as_np,axis = 0)
+
+
+            unique_data_samples_shape = unique_data_samples.shape[0]
+            range_of_samples_array = np.arange(unique_data_samples_shape)
+            # assert  range_of_samples_array.ndim == 2
+            starting_centroid_point_indicies = np.random.choice(range_of_samples_array, replace = False,size = k)
+            starting_centroid_point_indicies = starting_centroid_point_indicies.astype('int')
+            starting_centroids = unique_data_samples[starting_centroid_point_indicies,:]
+            if self.xp == cp:
+                starting_centroids = cp.asarray(starting_centroids)
+            #TODO maybe check if there are not enough unique colors for ammount of centroids
+            if unique_data_samples.shape[0] < self.k:
+                print(f'Warning!!!!!!!! \nNot enough unique samples for number of clusters (point initialization)')
         elif init_method == '++':
-            if len(self.data.shape) > 1:
-                starting_centroids = self.xp.ndarray((k, self.data.shape[1]))
-            else:
-                starting_centroids = self.xp.ndarray((k, 1))
+            starting_centroids = self.xp.zeros((k, self.num_features), dtype=self.set_data_type)
+
+            #get unique data-samples
+            data_as_np = cp.asnumpy(self.data)
+            unique_data_samples = np.unique(data_as_np, axis=0)
+
+
+
+            unique_data_samples_shape = unique_data_samples.shape[0]
+            range_of_samples_array = np.arange(unique_data_samples_shape,dtype = self.set_data_type)
+
+            if self.use_gpu:
+                # make cupy version
+                unique_data_samples = cp.array(unique_data_samples)
+
+            if unique_data_samples.shape[0] < self.k:
+                print(f'Warning!!!!!!!! \nNot enough unique samples for number of clusters (point initialization)')
+
             for i in range(k):
                 if i == 0:
-                    starting_centroids[i, :] = self.data[self.xp.random.randint(self.data.shape[0])]
+                    starting_centroids[i, :] = unique_data_samples[np.random.choice(range_of_samples_array)]
 
                 else:
                     if distance_calc_method == 'L2':
-                        if matix_mult_dist_calc:
-                            data_distance_from_centroids = -2 * self.data @ starting_centroids[:i,:].T + (self.data * self.data).sum(axis=-1)[:, None] + \
-                                                           (starting_centroids[:i,:] * starting_centroids[:i,:]).sum(axis=-1)[None]
-                            data_distance_from_centroids = self.xp.sqrt(self.xp.abs(data_distance_from_centroids))
+
+
+                        if self.xp == np:
+                            if matix_mult_dist_calc:
+                                data_distance_from_centroids = -2 * unique_data_samples @ starting_centroids[:i,:].T + (unique_data_samples * unique_data_samples).sum(axis=-1)[:, None] + \
+                                                               (starting_centroids[:i,:] * starting_centroids[:i,:]).sum(axis=-1)[None]
+                                data_distance_from_centroids = self.xp.sqrt(self.xp.abs(data_distance_from_centroids))
+                            else:
+                                data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
+                                                                               axis=1, arr=unique_data_samples, centroids=starting_centroids[:i,:],
+                                                                               method='L2')
+
                         else:
-                            data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
-                                                                           axis=1, arr=self.data, centroids=starting_centroids[:i,:],
-                                                                           method='L2')
-                    probs = data_distance_from_centroids / data_distance_from_centroids.sum()
-                    cumprobs = self.xp.sum(probs,axis = 1)
-                    starting_centroids[i, :] = self.data[self.xp.random.choice(self.xp.arange(self.data.shape[0]), p=cumprobs),:]
+                            # To much Memory when all on gpu
+
+                            # data_distance_from_centroids = self.xp.zeros((unique_data_samples_shape, i), dtype = self.set_data_type)
+                            # data_matrix_points = unique_data_samples[:, None, :]
+                            # centroids_so_far_0 = starting_centroids[:i,:]
+                            # centroids_so_far_1 = centroids_so_far_0 * self.xp.ones((unique_data_samples_shape,i), dtype = self.set_data_type)
+                            # centroids_matrix = centroids_so_far_1[None,:,:]
+                            # dist_calc_input = data_matrix_points - centroids_matrix
+                            # data_distance_from_centroids = self.euclidean_dist_kernel(dist_calc_input, axis = 1)
+
+                            data_distance_from_centroids = self.xp.zeros((unique_data_samples_shape, i),
+                                                                         dtype=self.set_data_type)
+                            data_matrix_points = unique_data_samples[:, None, :]
+                            centroids_chosen = np.arange(i)
+                            centroids_matrix = starting_centroids[centroids_chosen, :]
+                            centroids_matrix = centroids_matrix * self.xp.ones((i, self.num_features),
+                                                                                   dtype=self.set_data_type)
+                            centroids_matrix = centroids_matrix[None, :, :]
+                            dist_calc_input = data_matrix_points - centroids_matrix
+                            data_distance_from_centroids = self.euclidean_dist_kernel(dist_calc_input, axis=1)
+
+                    if distance_calc_method == 'L1':
+
+                        if self.xp == np:
+                            data_distance_from_centroids = self.xp.apply_along_axis(
+                                func1d=self.dist_pt_to_centroids,
+                                axis=1, arr=self.data, centroids=starting_centroids[:i, :],
+                                method='L2')
+
+                        else:
+                            data_distance_from_centroids = self.xp.zeros((self.num_samps, self.k), dtype = self.set_data_type)
+                            data_matrix_points = self.data[:, None, :]
+                            centroids_matrix = starting_centroids[None, :, :]
+                            dist_calc_input = data_matrix_points - centroids_matrix
+                            data_distance_from_centroids = self.manhattan_dist_kernel(dist_calc_input)
+
+                    dist_sums = data_distance_from_centroids.sum()
+
+                    probs = data_distance_from_centroids.sum(axis=1) / dist_sums
+                    # s_centroids = unique_data_samples[np.random.choice(range_of_samples_array, p=probs),:]
+                    if self.use_gpu:
+                        random_choice = np.random.choice(range_of_samples_array, p=probs.get())
+                        starting_centroids[i,:] = unique_data_samples[random_choice,:]
+                    else:
+                        starting_centroids[i,:] = unique_data_samples[np.random.choice(range_of_samples_array, p=probs),:]
 
         else:
             print(f'Error Method needs to be "range" or "points" currently it is {init_method}')
@@ -276,7 +386,7 @@ class KMeansGPU():
         self.k = k
 
         # - Initialize K-means variables
-        self.centroids = self.initialize(k,init_method)
+        self.centroids = self.initialize(k ,init_method)
 
 
         #do K-means untils distance less than thresh-hold or max ittters reached
@@ -360,25 +470,44 @@ class KMeansGPU():
             # and https://medium.com/@souravdey/l2-distance-matrix-vectorization-trick-26aa3247ac6c
             if distance_calc_method == 'L2':
                 if self.xp == np:
-                    data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[
-                                                                                  :, None] + \
-                                                   (centroids * centroids).sum(axis=-1)[None]
+                    data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[:, None] + (centroids * centroids).sum(axis=-1)[None]
                     data_distance_from_centroids = np.sqrt(np.abs(data_distance_from_centroids))
 
                 #else if it is Cupy Gpu bases
                 else:
+                    data_distance_from_centroids = self.xp.zeros((self.num_samps,self.k), dtype = self.set_data_type)
+                    data_matrix_points = self.data[:,None,:]
+                    centroids_matrix = centroids[None,:,:]
+                    dist_calc_input = data_matrix_points - centroids_matrix
+                    data_distance_from_centroids = self.euclidean_dist_kernel(dist_calc_input, axis = 2)
 
-                pass
+                data_distance_from_centroids = data_distance_from_centroids.reshape(data_distance_from_centroids.shape[0], centroids.shape[0])
+                labels = self.xp.argmin(data_distance_from_centroids, axis=1)
+                self.data_dist_from_centroid = self.xp.min(data_distance_from_centroids, axis=1)
+                return labels
+
+
             elif distance_calc_method == 'L1':
-                data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
+                if self.xp == np:
+                    data_distance_from_centroids = self.xp.apply_along_axis(func1d=self.dist_pt_to_centroids,
                                                                   axis=1, arr=self.data, centroids=centroids,
                                                                   method='L1')
-                data_distance_from_centroids = self.xp.abs(data_distance_from_centroids)
+                    data_distance_from_centroids = self.xp.abs(data_distance_from_centroids)
+                else:
+                    data_distance_from_centroids = self.xp.zeros((self.num_samps, self.k), dtype = self.set_data_type)
+                    data_matrix_points = self.data[:, None, :]
+                    centroids_matrix = centroids[None, :, :]
+                    dist_calc_input = data_matrix_points - centroids_matrix
+                    data_distance_from_centroids = self.manhattan_dist_kernel(dist_calc_input)
 
-            data_distance_from_centroids = data_distance_from_centroids.reshape(data_distance_from_centroids.shape[0],centroids.shape[0])
-            labels = self.xp.argmin(data_distance_from_centroids, axis = 1)
-            self.data_dist_from_centroid = self.xp.min(data_distance_from_centroids, axis = 1)
-            return labels
+                data_distance_from_centroids = data_distance_from_centroids.reshape(data_distance_from_centroids.shape[0], centroids.shape[0])
+                labels = self.xp.argmin(data_distance_from_centroids, axis=1)
+                self.data_dist_from_centroid = self.xp.min(data_distance_from_centroids, axis=1)
+                return labels
+
+
+
+
 
     def update_centroids(self, k, data_centroid_labels, prev_centroids, distance_calc_method = 'L2'):
         '''Computes each of the K centroids (means) based on the data assigned to each cluster
@@ -401,31 +530,44 @@ class KMeansGPU():
 
 
 
-        new_centroids = []
-        centroid_diff = []
-        for centroid_label, prev_centroid in zip(self.xp.arange(k), prev_centroids):
-            data_group_indicies = self.xp.where(data_centroid_labels == centroid_label)
+        if self.xp == np:
 
-            data_with_label = self.xp.squeeze(self.data[data_group_indicies,:])
+            new_centroids = []
+            centroid_diff = []
 
-            #TODO not sure if thius is proper way to handle when a centroid has not data label
-            # if some cluster appeared to be empty then:
-            # 1. find the biggest cluster
-            # 2. find the farthest from the center point in the biggest cluster
-            # 3. exclude the farthest point from the biggest cluster and form a new 1-point cluster.
-            if data_with_label.size == 0:
-                new_centroid = self.find_farthest_data_point(centroid_label,distance_calc_method)
-            elif data_with_label.size == self.num_features:
-                new_centroid = data_with_label
-            else:
-                new_centroid = data_with_label.mean(axis=0)
-            new_centroids.append(new_centroid)
-            #TODO maybe no abs for better speed since it is very computationaly intensive
-            centroid_diff.append(abs(new_centroid - prev_centroid))
+            for centroid_label, prev_centroid in enumerate(prev_centroids):
+                data_group_indicies = self.xp.where(data_centroid_labels == centroid_label)
 
-        new_centroids = self.xp.array(new_centroids, dtype= self.xp.float64 )
-        centroid_diff = self.xp.array(centroid_diff, dtype= self.xp.float64)
-        return new_centroids, centroid_diff
+                data_with_label = self.xp.squeeze(self.data[data_group_indicies,:])
+
+                #TODO not sure if thius is proper way to handle when a centroid has not data label
+                # if some cluster appeared to be empty then:
+                # 1. find the biggest cluster
+                # 2. find the farthest from the center point in the biggest cluster
+                # 3. exclude the farthest point from the biggest cluster and form a new 1-point cluster.
+                if data_with_label.size == 0:
+                    new_centroid = self.find_farthest_data_point(centroid_label,distance_calc_method)
+                elif data_with_label.size == self.num_features:
+                    new_centroid = data_with_label
+                else:
+                    new_centroid = data_with_label.mean(axis=0)
+                new_centroids.append(new_centroid)
+                #TODO maybe no abs for better speed since it is very computationaly intensive
+                centroid_diff.append(abs(new_centroid - prev_centroid))
+
+            new_centroids = self.xp.array(new_centroids, dtype= self.xp.float64 )
+            centroid_diff = self.xp.array(centroid_diff, dtype= self.xp.float64)
+            return new_centroids, centroid_diff
+        else:
+            label_range_array = self.xp.arange(self.k)
+            label_matrix = data_centroid_labels == label_range_array[:, None]
+            sum_data_mask = label_matrix[:,:,None]
+            data_sums = self.sum_kernal(self.data,sum_data_mask, axis = 1)
+            counts_of_centroids = self.count_kernal(label_matrix, axis = 1).reshape((self.k,1))
+            new_centroids = data_sums/counts_of_centroids
+            centroid_diff = self.xp.abs(prev_centroids-new_centroids)
+
+            return new_centroids, centroid_diff
 
     def compute_inertia(self ,distance_calc_method = 'L2'):
         '''Mean squared distance between every data sample and its assigned (nearest) centroid
@@ -459,8 +601,15 @@ class KMeansGPU():
         #             centroid_sum = np.sum(centroid_sum)
         #     sum_dist_of_centroids.append(centroid_sum)
 
-        intertia = self.xp.sum(self.data_dist_from_centroid)/self.num_samps
+        #TODO maybe add option for kernal use
+        sum_of_dists = self.xp.sum(self.data_dist_from_centroid)
+        intertia = sum_of_dists/self.num_samps
 
+        if self.xp == cp:
+            intertia_val = np.ndarray(shape=(), dtype= self.set_data_type)
+            intertia.get(out = intertia_val)
+            intertia_val = intertia_val.max()
+            return intertia_val
         return intertia
 
     def plot_clusters(self, cmap = palettable.colorbrewer.qualitative.Paired_12.mpl_colormap, title = '' ,x_axis = 0, y_axis = 1, fig_sz = (8,8), legend_font_size = 10):
@@ -525,12 +674,13 @@ class KMeansGPU():
         #set up plot
         fig, axes = plt.subplots(1,1,figsize =fig_sz)
 
-        k_s = self.xp.arange(max_k) + 1
+        k_s = np.arange(max_k) + 1
         #do all the k-means
         cluster_results = []
         for i in k_s:
             if cluster_method == 'single':
-                cluster_results.append(self.xp.array(self.cluster(k=i,distance_calc_method = distance_calc_method,max_iter=max_iter, init_method = init_method)))
+                self.cluster(k=i, distance_calc_method=distance_calc_method, max_iter=max_iter, init_method=init_method)
+                cluster_results.append(self.get_inertia())
             elif cluster_method == 'batch':
                 self.cluster_batch(k = i,n_iter=batch_iters,distance_calc_method=distance_calc_method,max_iter=max_iter, init_method = init_method)
                 cluster_results.append(self.get_inertia())
@@ -538,11 +688,7 @@ class KMeansGPU():
                 print(f'Error! cluster_method needs to be single or batch\nCurrently it is {cluster_method}')
                 raise ValueError
 
-        cluster_results = self.xp.array(cluster_results)
-        if cluster_method == 'batch':
-            k_means_interia = cluster_results
-        else:
-            k_means_interia = cluster_results[:, 0]
+        k_means_interia = np.array(cluster_results)
 
 
         axes.plot(k_s,k_means_interia)
@@ -565,34 +711,41 @@ class KMeansGPU():
         None
         '''
 
-        self.data = self.xp.array([self.centroids[label] for label in self.data_centroid_labels]).astype('int64')
+        self.data = self.xp.array([self.centroids[label] for label in self.data_centroid_labels]).astype('int')
 
 
 
     def find_farthest_data_point(self, label, distance_calc_method = 'L2'):
-        #finds farthest data pont in centroid with most data points if there is a centroid with no data
-        labels_series = pd.Series(self.data_centroid_labels)
-        label_counts = labels_series.value_counts()
-        largest_centroid_label = label_counts.idxmax()
-        data_in_largest_centroid = self.data[self.data_centroid_labels == largest_centroid_label]
 
-        largest_centroid = self.centroids[largest_centroid_label]
-        largest_centroid = largest_centroid.reshape(largest_centroid.size,1)
-        #TODO clean up
-        data_distance_from_centroid = self.xp.apply_along_axis(func1d=self.dist_pt_to_pt,
-                                                           axis=1, arr=data_in_largest_centroid, pt_2=largest_centroid,
-                                                          method = distance_calc_method)
+        # one hot encode all the labels for the data
+        label_range_array = self.xp.arange(self.k)
+        label_matrix = self.data_centroid_labels == label_range_array[:, None]
+        if self.xp == np:
+            counts_of_centroids = label_matrix.astype('float64')
+            counts_of_centroids = self.xp.sum(counts_of_centroids,axis=1)
+        else:
+            counts_of_centroids = self.count_kernal(label_matrix, axis=1).reshape((self.k, 1))
 
-        data_distance_from_centroid_series = pd.Series(data_distance_from_centroid)
-        data_with_greatest_distance_index = data_distance_from_centroid_series.idxmax()
-        data_with_greatest_distance = self.data[data_with_greatest_distance_index]
+        largest_label = self.xp.argmax(counts_of_centroids)
 
-        #return the point with the greatest distance
-        data_index = self.xp.where(self.data == data_with_greatest_distance)
-        data_index_series = pd.Series(data_index[0])
-        data_index_count = data_index_series.value_counts()
-        data_index_check = self.data[data_index[0]]
-        largest_data_index = data_index_count[data_index_count == 3]
-        self.data_centroid_labels[data_index[0]] = label
-        return data_with_greatest_distance
+        data_in_largest_centroid = self.data[(self.data_centroid_labels == largest_label),:]
+        largest_centroid = self.centroids[largest_label]
+
+        pre_dist_calc_matrix = data_in_largest_centroid - largest_centroid
+
+        if distance_calc_method == 'L2':
+            if self.xp == np:
+                sum_part = self.xp.sum(pre_dist_calc_matrix, axis=1)
+                data_dists = self.xp.sqrt(sum_part * sum_part)
+            else:
+                data_dists = self.xp.zeros((data_in_largest_centroid.size,self.k), dtype = self.set_data_type)
+                data_dists = self.euclidean_dist_kernel(pre_dist_calc_matrix)
+
+
+        largest_data_point = data_in_largest_centroid[self.xp.argmax(data_dists)]
+
+        label_change_index = self.xp.where(self.xp.all(self.data==largest_data_point,axis=1))
+        self.data_centroid_labels[label_change_index] = label
+
+        return largest_data_point
 
