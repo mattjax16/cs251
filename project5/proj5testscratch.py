@@ -14,7 +14,7 @@ plt.rcParams.update({'font.size': 20})
 np.set_printoptions(suppress=True, precision=5)
 import pandas as pd
 import time
-import kmeansCupyEx
+# import kmeansCupyEx
 
 def flatten(img):
     '''Flattens `img` to N 1D vectors.
@@ -31,56 +31,56 @@ def flatten(img):
     flatten_img = img.reshape(img.shape[0] * img.shape[1], img.shape[2])
     return flatten_img
 
-intense_m29_img = plt.imread('https://p.vitalmtb.com/photos/products/28620/photos/54903/s1600_photo_734056.jpg?1578283962', 'jpg')
-flatten_intense_m29 = flatten(intense_m29_img)
-
-
-m29_cluster_gpu = kmeansGPU.KMeansGPU(flatten_intense_m29)
-m29_cluster = kmeans.KMeans(flatten_intense_m29)
-
-
-five_blobs = pd.read_csv('data/five_blobs.csv')
-five_blobs_cluster_gpu = kmeansGPU.KMeansGPU(five_blobs.values)
-five_blobs_cluster_gpu.cluster(5)
-
-
-s = time.time()
-m29_cluster_gpu.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
-e = time.time()
-print(e - s)
-
-s = time.time()
-m29_cluster.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
-e = time.time()
-print(e - s)
-
-
-
-
-s = time.time()
-m29_cluster_gpu.cluster(5)
-e = time.time()
-print(e - s)
-
-s = time.time()
-m29_cluster.cluster(5)
-e = time.time()
-print(e - s)
-
-print(f'Done with L2')
-
-s = time.time()
-m29_cluster_gpu.cluster(5,distance_calc_method='L1')
-e = time.time()
-print(e - s)
-
-s = time.time()
-m29_cluster.cluster(5,distance_calc_method='L1')
-e = time.time()
-print(e - s)
-
-print(f'Done with L1')
-
+# intense_m29_img = plt.imread('https://p.vitalmtb.com/photos/products/28620/photos/54903/s1600_photo_734056.jpg?1578283962', 'jpg')
+# flatten_intense_m29 = flatten(intense_m29_img)
+#
+#
+# m29_cluster_gpu = kmeansGPU.KMeansGPU(flatten_intense_m29)
+# m29_cluster = kmeans.KMeans(flatten_intense_m29)
+#
+#
+# five_blobs = pd.read_csv('data/five_blobs.csv')
+# five_blobs_cluster_gpu = kmeansGPU.KMeansGPU(five_blobs.values)
+# five_blobs_cluster_gpu.cluster(5)
+#
+#
+# s = time.time()
+# m29_cluster_gpu.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
+# e = time.time()
+# print(e - s)
+#
+# s = time.time()
+# m29_cluster.elbow_plot(max_k =  5, cluster_method = 'single',init_method = 'points',batch_iters = 2, max_iter = 10)
+# e = time.time()
+# print(e - s)
+#
+#
+#
+#
+# s = time.time()
+# m29_cluster_gpu.cluster(5)
+# e = time.time()
+# print(e - s)
+#
+# s = time.time()
+# m29_cluster.cluster(5)
+# e = time.time()
+# print(e - s)
+#
+# print(f'Done with L2')
+#
+# s = time.time()
+# m29_cluster_gpu.cluster(5,distance_calc_method='L1')
+# e = time.time()
+# print(e - s)
+#
+# s = time.time()
+# m29_cluster.cluster(5,distance_calc_method='L1')
+# e = time.time()
+# print(e - s)
+#
+# print(f'Done with L1')
+#
 
 # m29_cluster_gpu.cluster(5)
 #
@@ -252,47 +252,62 @@ print(f'Done with L1')
 
 
 
-# super_simple = pd.read_csv('data/super_simple.csv')
-# super_simple = super_simple.values
+super_simple = pd.read_csv('data/super_simple.csv')
+super_simple = super_simple.values
+
+cluster = kmeansGPU.KMeansGPU(super_simple,use_gpu=False)
+
+# test_sk = sckm(super_simple,3,1000)
+
+
+a = np.array([1, 2, 3, 4])
+b = 4*a
+print(f'Your pt-to-pt distance is {cluster.dist_pt_to_pt(a, b)}')
+print(f'Correct pt-to-pt distance is {np.linalg.norm(a-b)}')
+
+
+test_pt = np.array([[1, 2]])
+test_centroids = np.array([[9, 9], [11, 11], [0, 0]])
+
+test_pt_cp = cp.array(test_pt)
+test_centroids_cp = cp.array(test_centroids)
+
+print(f'Your pt-to-centroids distance is {cluster.dist_pt_to_centroids(test_pt.flatten(), test_centroids)}')
+print(f'Correct pt-to-centroids distance is {distance.cdist(test_pt, test_centroids)[0]}')
+
+
+test_k = 3
+init_centroids = cluster.initialize(test_k)
+print(f'Initial cluster centroids shape is:\n{init_centroids.shape} and should be (3, 2)')
+
+
+# Consistently set initial centroids for test
+init_centroids = np.array([[ 0.338, 4.4672], [-1.8401, 3.1123], [1.7931, 0.5427]])
+
+
+init_centroids_cp = cp.array([[ 0.338, 4.4672], [-1.8401, 3.1123], [1.7931, 0.5427]])
+
+
+new_labels = cluster.update_labels(init_centroids)
+print(f'After the first update data label step, 1st 10 of your cluster assignments are:\n{new_labels[:10]}')
+print('Your 1st 10 cluster assignments should be:\n[0 1 1 1 2 0 2 1 2 1]')
+
+new_centroids, diff_from_prev_centroids = cluster.update_centroids(test_k, new_labels, init_centroids)
+print(f'After the first centroid update, your cluster assignments are:\n{new_centroids}')
+print(f'Your difference from previous centroids:\n{diff_from_prev_centroids}')
+
+
+
+cluster.centroids = new_centroids
+cluster.data_centroid_labels = new_labels
+print(f'After the first test k-means update, your inertia is:\n{cluster.compute_inertia()}\nIt should be\n0.10738760429999998')
+
+# np.random.seed(0)
+# cluster.cluster(k = 3)
+# cluster.plot_clusters()
+# plt.show()
+
 #
-# cluster = kmeans.KMeans(super_simple)
-#
-# # test_sk = sckm(super_simple,3,1000)
-#
-#
-# a = np.array([1, 2, 3, 4])
-# b = 4*a
-# print(f'Your pt-to-pt distance is {cluster.dist_pt_to_pt(a, b)}')
-# print(f'Correct pt-to-pt distance is {np.linalg.norm(a-b)}')
-#
-#
-# test_pt = np.array([[1, 2]])
-# test_centroids = np.array([[9, 9], [11, 11], [0, 0]])
-# print(f'Your pt-to-centroids distance is {cluster.dist_pt_to_centroids(test_pt.flatten(), test_centroids)}')
-# print(f'Correct pt-to-centroids distance is {distance.cdist(test_pt, test_centroids)[0]}')
-#
-#
-# test_k = 3
-# init_centroids = cluster.initialize(test_k)
-# print(f'Initial cluster centroids shape is:\n{init_centroids.shape} and should be (3, 2)')
-#
-#
-# # Consistently set initial centroids for test
-# init_centroids = np.array([[ 0.338, 4.4672], [-1.8401, 3.1123], [1.7931, 0.5427]])
-#
-# new_labels = cluster.update_labels(init_centroids)
-# print(f'After the first update data label step, 1st 10 of your cluster assignments are:\n{new_labels[:10]}')
-# print('Your 1st 10 cluster assignments should be:\n[0 1 1 1 2 0 2 1 2 1]')
-#
-# new_centroids, diff_from_prev_centroids = cluster.update_centroids(test_k, new_labels, init_centroids)
-# print(f'After the first centroid update, your cluster assignments are:\n{new_centroids}')
-# print(f'Your difference from previous centroids:\n{diff_from_prev_centroids}')
-# # np.random.seed(0)
-# # cluster.cluster(k = 3)
-# # cluster.plot_clusters()
-# # plt.show()
-# #
-# #
 # #
 # # cluster.elbow_plot(30,title = f'Number of Ks for Simple Data\nEffect on Inertia')
 # # plt.show()

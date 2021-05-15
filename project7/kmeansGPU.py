@@ -73,6 +73,8 @@ class KMeansGPU():
 
             self.set_data(data)
             self.num_samps, self.num_features = data.shape
+        else:
+            self.set_data_type = data_type
 
 
         # Making Cuda Kernal Functions for increased speed on gpu
@@ -299,7 +301,7 @@ class KMeansGPU():
 
 
             unique_data_samples_shape = unique_data_samples.shape[0]
-            range_of_samples_array = np.arange(unique_data_samples_shape,dtype = self.set_data_type)
+            range_of_samples_array = np.arange(unique_data_samples_shape)
 
             if self.use_gpu:
                 # make cupy version
@@ -310,8 +312,10 @@ class KMeansGPU():
 
             for i in range(k):
                 if i == 0:
+
                     starting_centroids[i, :] = unique_data_samples[np.random.choice(range_of_samples_array)]
 
+                    # starting_centroids[i, :] = unique_data_samples[np.random.choice(range_of_samples_array)]
                 else:
                     if distance_calc_method == 'L2':
 
@@ -592,7 +596,7 @@ class KMeansGPU():
 
             return new_centroids, centroid_diff
 
-    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False):
+    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False,one_hot = False):
         '''Mean squared distance between every data sample and its assigned (nearest) centroid
 
         Parameters:
@@ -606,24 +610,37 @@ class KMeansGPU():
 
         centroid_mean_dist_array = self.xp.zeros(len(self.centroids))
         centroid_mean_squared_dist_array= self.xp.zeros(len(self.centroids))
+
+        centroid_mean_squared_dist_list = []
         for index, centroid in enumerate(self.centroids):
             if distance_calc_method == 'L2':
 
 
-                data_to_centroid_locs = self.xp.where(self.data_centroid_labels == index)
 
                 data_in_centroid = self.data[self.data_centroid_labels == index]
 
-                data_dif_to_centroid = data_in_centroid - centroid
 
-                centroid_square_dist_array = self.xp.sum((centroid - data_in_centroid) * (centroid - data_in_centroid), axis=1)
+                centroid_square_dist_part_1 = (centroid - data_in_centroid) * (centroid - data_in_centroid)
+                if centroid_square_dist_part_1.shape[0] == 1:
+                    centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1)
+                else:
+                    centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1, axis=1)
 
                 if get_mean_dist_per_centroid:
                     centroid_dist_array = self.xp.sqrt(centroid_square_dist_array)
-                    centroid_mean_dist = self.xp.mean(centroid_dist_array)
+
+                    #if there is only one centroid witht he distance
+                    if centroid_square_dist_part_1.shape[0] == 1:
+                        centroid_mean_dist = centroid_dist_array
+                    else:
+                        centroid_mean_dist = self.xp.mean(centroid_dist_array)
+
                     centroid_mean_dist_array[index] = centroid_mean_dist
 
-                centroid_mean_squared = self.xp.mean(centroid_square_dist_array)
+                if centroid_square_dist_array.size == 1:
+                    centroid_mean_squared = centroid_square_dist_array.max()
+                else:
+                    centroid_mean_squared = self.xp.mean(centroid_square_dist_array)
 
 
             #TODO fix calculation for squared dist not normal dist
@@ -644,7 +661,7 @@ class KMeansGPU():
 
 
         #TODO maybe add option for kernal use
-        sum_of_dists = self.xp.sum(centroid_mean_squared_dist_array)
+        sum_of_dists = self.xp.sum(self.xp.array(centroid_mean_squared_dist_array))
         intertia = sum_of_dists/centroid_mean_squared_dist_array.size
 
         if self.xp == cp:
