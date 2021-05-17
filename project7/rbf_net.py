@@ -16,7 +16,7 @@ import time
 from linear_regression_gpu import LinearRegression
 
 class RBF_Net:
-    def __init__(self, num_hidden_units, num_classes, use_gpu = True):
+    def __init__(self, num_hidden_units, num_classes, use_gpu = False):
         '''RBF network constructor
 
         Parameters:
@@ -131,6 +131,39 @@ class RBF_Net:
 
 
 
+    #helper function to get psuedo invers of hidden activation matrix (really psuedo invese of any matrix)
+    def get_p_inv(self,data):
+        assert data.ndim == 2
+
+        #Thanks to Prof Steve Brunton of University of Wasahington for the great video on SVD matrix approximation which
+        #helped me figure out how to do this from scratch!
+        # Link: https://www.youtube.com/watch?v=xy3QyyhiuY4
+
+
+        #GPU htrough cupy doenst work at the moment so maing all numpy
+        data = self.getAsNumpy(data)
+
+        #get the single value decomostion of the matrix
+        u, s ,v = np.linalg.svd(data)
+
+        # get the recipricoal of the sigmas from the svd
+        s_recips = 1/s
+
+        #make a matrix of zeros same size as the data
+        s_matrix = np.zeros(data.shape)
+
+        #make sigma diagnoal matrix
+        s_diag = np.diag(s_recips)
+
+        #fill the top part with diag of the sigma recipricols
+        s_matrix[:data.shape[1],:data.shape[1]] = s_diag
+
+        p_inv_matrix = v.T @ s_matrix.T @ u.T
+
+        #make p inverse proper array type
+        p_inv_matrix = self.checkArrayType(p_inv_matrix)
+
+        return p_inv_matrix
 
     def get_prototypes(self):
         '''Returns the hidden layer prototypes (centers)
@@ -196,7 +229,7 @@ class RBF_Net:
         avg_cluster_dist = kmeans_obj.compute_inertia(get_mean_dist_per_centroid=True)[1]
         return avg_cluster_dist
 
-    def initialize(self, data, n_iter=10,  tol=1e-2, max_iter=100, init_method = 'points',distance_calc_method = 'L2',debug = False,):
+    def initialize(self, data, n_iter=10,  tol=1e-2, max_iter=100, init_method = '++',distance_calc_method = 'L2',debug = False,):
         '''Initialize hidden unit centers using K-means clustering and initialize sigmas using the
         average distance within each cluster
 
@@ -233,7 +266,7 @@ class RBF_Net:
         if debug:
             print(f'It Took {start_time - time.time()} to run initialize()')
 
-    def linear_regression(self, A, y, debug = False,method='qr'):
+    def linear_regression(self, A, y, debug = False,method='qr', bias_weight_on_back = True ):
         '''Performs linear regression
         CS251: Adapt your SciPy lstsq code from the linear regression project.
         CS252: Adapt your QR-based linear regression solver
@@ -259,12 +292,13 @@ class RBF_Net:
         A = self.checkArrayType(A)
         y = self.checkArrayType(y)
 
+
         #make linear regression object
         lin_reg_obj = LinearRegression(data=list(A))
 
 
         if method == 'scipy':
-            c = lin_reg_obj.linear_regression_scipy(A,y)
+            c = lin_reg_obj.linear_regression_scipy(A.T,y)
         elif method == 'normal':
             c = lin_reg_obj.linear_regression_normal(A,y)
         elif method == 'qr':
@@ -272,6 +306,12 @@ class RBF_Net:
 
 
 
+        if bias_weight_on_back:
+            #TODO not sure if to flip or just move idxs
+            #bias_weight = c[0]
+            #move weight to
+                #flip for now
+            c = c[::-1]
         if debug:
             print(f'It Took {start_time - time.time()} to run linear_regression()')
 
@@ -299,7 +339,6 @@ class RBF_Net:
         data = self.checkArrayType(data)
         prototypes = self.checkArrayType(self.prototypes)
         sigmas = self.checkArrayType(self.sigmas)
-        weights = self.checkArrayType(self.wts)
 
         data_matrix = data[:,None,:]
         prototypes_matrix = prototypes[None,:,:]
@@ -347,15 +386,17 @@ class RBF_Net:
         wts = self.checkArrayType(self.wts)
 
         #add ones
-        hidden_acts = self.xp.hstack((hidden_acts,self.xp.ones((hidden_acts.shape[0],1))))
+        hidden_acts_ones = self.xp.hstack((hidden_acts,self.xp.ones((hidden_acts.shape[0],1))))
 
-
-        output_activation = hidden_acts @ wts
+        wts_ones = self.xp.vstack((wts,self.xp.ones((1,wts.shape[1]))))
+        wts_ones2 = self.xp.vstack((self.xp.ones((1, wts.shape[1])),wts))
+        output_activation1 = hidden_acts_ones@wts
+        # output_activation2 = hidden_acts @ wts
 
         if debug:
             print(f'It Took {start_time - time.time()} to run output_act()')
-        return output_activation
-    def train(self, data, y, debug = False):
+        return output_activation1
+    def train(self, data, y, debug = False, use_svd = True):
         '''Train the radial basis function network
 
         Parameters:
@@ -378,8 +419,49 @@ class RBF_Net:
         if debug:
             start_time = time.time()
 
+        #check input sfor propper data array types
+        data = self.checkArrayType(data)
+        y = self.checkArrayType(y)
+
+        # initilize
+        self.initialize(data)
+
+        #get all unique labels for y (output categories)
+        unique_y = self.xp.unique(y)
+
+        #see if enough unique labels fot set number out output units
+        if unique_y.size < self.num_output_units:
+            print(f'Warning!!! Number of unique lables provided ({unique_y.size})' +
+                  f'\nIs less than the number of output units set({self.num_output_units})!!!')
+
+        #reshape it for one hot encoding
+        unique_y = unique_y[:,None]
+
+        #one hot encode y
+        y_one_hot = y == unique_y
+        y_one_hot = y_one_hot.astype('int')
+
+
+
+        hidden_acts = self.hidden_act(data)
+
+        if self.use_gpu:
+            hidden_acts = cp.nan_to_num(hidden_acts)
+
+        hidden_acts_ones = self.xp.hstack((hidden_acts,self.xp.ones((hidden_acts.shape[0], 1))))
+
+        #see whether to use svd to speed up regression calculations or not
+        if use_svd:
+            hidden_acts_p_inv = self.get_p_inv(hidden_acts_ones.T @ hidden_acts_ones)
+            weights = hidden_acts_p_inv @ hidden_acts_ones.T @ y_one_hot.T
+            # weights = self.xp.abs(weights)
+
+        #TODO maybe add loop regression
         if debug:
             print(f'It Took {start_time - time.time()} to run train()')
+
+        #set the weights
+        self.wts = weights
 
     def predict(self, data, debug = False):
         '''Classify each sample in `data`
@@ -401,8 +483,20 @@ class RBF_Net:
         if debug:
             start_time = time.time()
 
+        # check input sfor propper data array types
+        data = self.checkArrayType(data)
+
+        #get hidden activations of hidden data
+        test_hidden_acts = self.hidden_act(data)
+
+        test_output_acts = self.output_act(test_hidden_acts)
+
+        predictions = self.xp.argmax(test_output_acts,axis = 1)
         if debug:
             print(f'It Took {start_time - time.time()} to run predict()')
+
+
+        return predictions
 
     def accuracy(self, y, y_pred, debug = False):
         '''Computes accuracy based on percent correct: Proportion of predicted class labels `y_pred`
@@ -424,9 +518,19 @@ class RBF_Net:
         if debug:
             start_time = time.time()
 
+        # check input sfor propper data array types
+        y = self.checkArrayType(y)
+        y_pred = self.checkArrayType(y_pred)
+
+        prop_correct = y == y_pred
+
+        prop_correct = prop_correct.astype('int')
+
+        acc = prop_correct.sum()/prop_correct.size
         if debug:
             print(f'It Took {start_time - time.time()} to run accuracy()')
 
+        return acc
 
 class RBF_Reg_Net(RBF_Net):
     '''RBF Neural Network configured to perform regression
@@ -446,7 +550,9 @@ class RBF_Reg_Net(RBF_Net):
         '''
         super().__init__(num_hidden_units, num_classes)
 
-    def hidden_act(self, data, debug = False):
+        self.h_sigma_gain = h_sigma_gain
+
+    def hidden_act(self, data, debug = False,epsilon= 1e-8):
         '''Compute the activation of the hidden layer units
 
         Parameters:
@@ -466,6 +572,29 @@ class RBF_Reg_Net(RBF_Net):
         '''
         if debug:
             start_time = time.time()
+
+
+        #check data type input
+        data = self.checkArrayType(data)
+        prototypes = self.checkArrayType(self.prototypes)
+        sigmas = self.checkArrayType(self.sigmas)
+
+        data_matrix = data[:,None,:]
+        prototypes_matrix = prototypes[None,:,:]
+
+        dist_matrix = data_matrix - prototypes_matrix
+        dist_matrix = dist_matrix * dist_matrix
+        dist_matrix = dist_matrix.sum(axis=2)
+
+        sigmas_squared = sigmas * sigmas
+        sigmas_squared = sigmas_squared*2
+        sigmas_squared = sigmas_squared + epsilon
+
+        hidden_acts = self.xp.exp(-(dist_matrix/sigmas_squared))
+
+        if debug:
+            print(f'It Took {start_time - time.time()} to run hidden_act()')
+        return hidden_acts
 
         if debug:
             print(f'It Took {start_time - time.time()} to run Reg_Net hidden_act()')
@@ -518,6 +647,9 @@ class RBF_Reg_Net(RBF_Net):
         '''
         if debug:
             start_time = time.time()
+
+
+
 
         if debug:
             print(f'It Took {start_time - time.time()} to run Reg_Net predict()')

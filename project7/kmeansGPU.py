@@ -294,9 +294,11 @@ class KMeansGPU():
         elif init_method == '++':
             starting_centroids = self.xp.zeros((k, self.num_features), dtype=self.set_data_type)
 
+            np_data = self.data
             #get unique data-samples
-            data_as_np = cp.asnumpy(self.data)
-            unique_data_samples = np.unique(data_as_np, axis=0)
+            if self.use_gpu:
+                np_data = np_data.get()
+            unique_data_samples = np.unique(np_data, axis=0)
 
 
 
@@ -441,7 +443,7 @@ class KMeansGPU():
         #
         # return self.inertia, max_iter
 
-    def cluster_batch(self, k=2, n_iter=1,  tol=1e-2, max_iter=100, verbose=False, init_method = 'points',distance_calc_method = 'L2'):
+    def cluster_batch(self, k=2, n_iter=5,  tol=1e-2, max_iter=100, verbose=False, init_method = 'points',distance_calc_method = 'L2'):
         '''Run K-means multiple times, each time with different initial conditions.
         Keeps track of K-means instance that generates lowest inertia. Sets the following instance
         variables based on the best K-mean run:
@@ -458,6 +460,7 @@ class KMeansGPU():
 
         # initialize best distance value to a large value
         best_intertia = self.xp.inf
+        has_found_better_centroids = False
         for i in range(n_iter):
             intertia_kmeans, number_of_iters = self.cluster(k,tol=tol, max_iter=max_iter,verbose=verbose,
                                                             init_method=init_method,distance_calc_method=distance_calc_method)
@@ -465,10 +468,12 @@ class KMeansGPU():
                 best_intertia = intertia_kmeans
                 best_centroids = self.centroids
                 best_data_labels = self.data_centroid_labels
+                has_found_better_centroids = True
 
-        self.inertia = best_intertia
-        self.centroids = best_centroids
-        self.data_centroid_labels = best_data_labels
+        if has_found_better_centroids:
+            self.inertia = best_intertia
+            self.centroids = best_centroids
+            self.data_centroid_labels = best_data_labels
 
     def update_labels(self, centroids, multiProcess = False, matix_mult_dist_calc = True, distance_calc_method = 'L2'):
         '''Assigns each data sample to the nearest centroid
@@ -596,7 +601,7 @@ class KMeansGPU():
 
             return new_centroids, centroid_diff
 
-    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False,one_hot = False):
+    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False):
         '''Mean squared distance between every data sample and its assigned (nearest) centroid
 
         Parameters:
@@ -620,7 +625,7 @@ class KMeansGPU():
                 data_in_centroid = self.data[self.data_centroid_labels == index]
 
 
-                centroid_square_dist_part_1 = (centroid - data_in_centroid) * (centroid - data_in_centroid)
+                centroid_square_dist_part_1 = (data_in_centroid - centroid) * (data_in_centroid - centroid)
                 if centroid_square_dist_part_1.shape[0] == 1:
                     centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1)
                 else:
@@ -664,20 +669,23 @@ class KMeansGPU():
         sum_of_dists = self.xp.sum(self.xp.array(centroid_mean_squared_dist_array))
         intertia = sum_of_dists/centroid_mean_squared_dist_array.size
 
-        if self.xp == cp:
-            intertia_val = np.ndarray(shape=(), dtype= self.set_data_type)
-            intertia.get(out = intertia_val)
-            intertia_val = intertia_val.max()
-
-            if get_mean_dist_per_centroid:
-                return intertia_val, centroid_mean_dist_array
-            else:
-                return intertia_val
-
         if get_mean_dist_per_centroid:
+
             return intertia, centroid_mean_dist_array
         else:
             return intertia
+
+        # if self.xp == cp:
+        #
+        #     if get_mean_dist_per_centroid:
+        #         return intertia, centroid_mean_dist_array
+        #     else:
+        #         return intertia
+        #
+        # if get_mean_dist_per_centroid:
+        #     return intertia, centroid_mean_dist_array
+        # else:
+        #     return intertia
 
     def plot_clusters(self, cmap = palettable.colorbrewer.qualitative.Paired_12.mpl_colormap, title = '' ,x_axis = 0, y_axis = 1, fig_sz = (8,8), legend_font_size = 10):
 

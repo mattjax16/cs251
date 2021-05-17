@@ -12,12 +12,15 @@ import sys
 import analysis
 
 
+#for gpu aceleration
+import cupy as cp
+
 class LinearRegression(analysis.Analysis):
     '''
     Perform and store linear regression and related analyses
     '''
 
-    def __init__(self, data):
+    def __init__(self, data,use_gpu = False):
         '''
 
         Parameters:
@@ -71,6 +74,35 @@ class LinearRegression(analysis.Analysis):
         # dep_var: string. dependant variable
         self.dep_var = None
 
+        self.use_gpu = use_gpu
+        if use_gpu:
+            self.xp = cp
+        else:
+            self.xp = np
+
+    # helper functions for gpu acceleration
+    def checkArrayType(self, data):
+        if self.use_gpu:
+            if cp.get_array_module(data) == np:
+                data = cp.array(data)
+        else:
+            if cp.get_array_module(data) == cp:
+                data = np.array(data)
+
+        return data
+
+    # helper function to get things as numpy
+    def getAsNumpy(self, data):
+        if cp.get_array_module(data) == cp:
+            data = data.get()
+        return data
+
+    # helper function to get things as numpy
+    def getAsCupy(self, data):
+        if cp.get_array_module(data) == np:
+            data = cp.array(data)
+        return data
+
     def linear_regression(self, ind_vars = None, dep_var = None, method='scipy', p=1, slope = None, intercept = None):
         '''Performs a linear regression on the independent (predictor) variable(s) `ind_vars`
         and dependent variable `dep_var.
@@ -120,8 +152,8 @@ class LinearRegression(analysis.Analysis):
             print(f'Error: there must be at least 1 ind_var')
             sys.exit()
 
-        ind_vars_array = np.array(ind_vars)
-        headers_array = np.array(self.data.get_headers())
+        ind_vars_array = self.xp.array(ind_vars)
+        headers_array = self.xp.array(self.data.get_headers())
 
         if dep_var not in headers_array:
             print(f'Error: dep_var: {dep_var} needs to be in {headers_array}')
@@ -220,7 +252,12 @@ class LinearRegression(analysis.Analysis):
             Linear regression slope coefficients for each independent var PLUS the intercept term
         '''
 
-        A = np.hstack([np.ones([A.shape[0], 1]), A])
+        #chech inputs are proper array types
+        A = self.checkArrayType(A)
+        y = self.checkArrayType(y)
+
+
+        A = self.xp.hstack([self.xp.ones([A.shape[0], 1]), A])
         c, res, rnk, s = scipy.linalg.lstsq(A, y)
         return c
 
@@ -243,12 +280,14 @@ class LinearRegression(analysis.Analysis):
             Linear regression slope coefficients for each independent var AND the intercept term
         '''
 
+        # chech inputs are proper array types
+        A = self.checkArrayType(A)
+        y = self.checkArrayType(y)
 
-
-        A = np.hstack([np.ones([A.shape[0], 1]), A])
+        A = self.xp.hstack([self.xp.ones([A.shape[0], 1]), A])
 
         A_first_part = (A.T@A)
-        invA = np.linalg.inv(A_first_part)
+        invA = self.xp.linalg.inv(A_first_part)
 
         second_part = (A.T)@(y)
 
@@ -278,7 +317,12 @@ class LinearRegression(analysis.Analysis):
         NOTE: You should not compute any matrix inverses! Check out scipy.linalg.solve_triangular
         to backsubsitute to solve for the regression coefficients `c`.
         '''
-        A = np.hstack([np.ones([A.shape[0], 1]), A])
+
+        # chech inputs are proper array types
+        A = self.checkArrayType(A)
+        y = self.checkArrayType(y)
+
+        A = self.xp.hstack([self.xp.ones([A.shape[0], 1]), A])
         Q, R = self.qr_decomposition(A)
         c = scipy.linalg.solve_triangular(R,(Q.T@y))
         return c
@@ -312,14 +356,17 @@ class LinearRegression(analysis.Analysis):
         - R is found by equation summarized in notebook
         '''
 
+        # chech inputs are proper array types
+        A = self.checkArrayType(A)
+
         num_rows, num_cols = A.shape
-        Q = np.zeros((num_rows, num_cols))
+        Q = self.xp.zeros((num_rows, num_cols))
         for j in range(num_cols):
             u = A[:, j]
             for i in range(j):
                 # (Q[:, i]@u) * Q[:, i] is the projection
                 u = u - (Q[:, i] @ u) * Q[:, i]
-            Q[:, j] = u / np.linalg.norm(u)
+            Q[:, j] = u / self.xp.linalg.norm(u)
 
         R = Q.T @ A
         return Q, R
@@ -359,9 +406,12 @@ class LinearRegression(analysis.Analysis):
             X = self.make_polynomial_matrix(X,self.p)
 
 
+        # make sure x is the right array type
+        X = self.checkArrayType(X)
+
         if method == "vectorized":
 
-            y_pred = np.array(self.intercept + np.sum((X*np.array(self.slope).T),1))[:,np.newaxis]
+            y_pred = self.xp.array(self.intercept + self.xp.sum((X*self.xp.array(self.slope).T),1))[:,self.xp.newaxis]
             return y_pred
 
     def r_squared(self, y_pred):
@@ -377,9 +427,13 @@ class LinearRegression(analysis.Analysis):
         R2: float.
             The R^2 statistic
         '''
-        y_mean = np.mean(self.actual_y)
-        r2_bottom = np.sum((self.actual_y - y_mean) ** 2)
-        r2_top = np.sum((self.predicted_y - y_mean)**2)
+
+        # make sure y_pred is the right array type
+        y_pred = self.checkArrayType(y_pred)
+
+        y_mean = self.xp.mean(self.actual_y)
+        r2_bottom = self.xp.sum((self.actual_y - y_mean) ** 2)
+        r2_top = self.xp.sum((self.predicted_y - y_mean)**2)
         R2 = (r2_top/r2_bottom)
         return R2
 
@@ -399,6 +453,11 @@ class LinearRegression(analysis.Analysis):
             Difference between the y values and the ones predicted by the regression model at the
             data samples
         '''
+
+        # make sure y_pred is the right array type
+        y_pred = self.checkArrayType(y_pred)
+        self.actual_y = self.checkArrayType(self.actual_y)
+
         residuals = self.actual_y - y_pred
         return residuals
 
@@ -414,7 +473,7 @@ class LinearRegression(analysis.Analysis):
 
         Hint: Make use of self.compute_residuals
         '''
-        m_sse = (np.sum((self.residuals)**2))/(len(self.residuals))
+        m_sse = (self.xp.sum((self.residuals)**2))/(len(self.residuals))
         return m_sse
 
     def scatter(self, ind_var, dep_var, title = None):
@@ -442,6 +501,11 @@ class LinearRegression(analysis.Analysis):
             title = f'{title}\nR^2 : {self.R2:.8F}'
 
         x_cords, y_cords = analysis.Analysis.scatter(self, ind_var=ind_var, dep_var=dep_var, title=title)
+
+        #make sure cors are numpy
+        x_cords = self.getAsNumpy(x_cords)
+        y_cords = self.getAsNumpy(y_cords)
+
         x_linreg_plot_cords = np.linspace(np.min(x_cords),np.max(x_cords))
         if self.p == 1:
             y_linreg_plot_cords = self.intercept + self.slope[self.ind_vars.index(ind_var)]*x_linreg_plot_cords
@@ -563,7 +627,10 @@ class LinearRegression(analysis.Analysis):
         # if A.shape[1] != 1:
         #     print(f"ERROR: A needs {self.residuals.shape[0]} Samples\nCurrently it has {A.shape[1]} ")
 
-        poly_mat = np.power(A*(np.ones((A.shape[0],p))),(1+np.arange(p)))
+        #get right array type for A
+        A = self.checkArrayType(A)
+
+        poly_mat = self.xp.power(A*(self.xp.ones((A.shape[0],p))),(1+self.xp.arange(p)))
         return (poly_mat)
 
     def poly_regression(self, ind_var, dep_var, p):
@@ -611,7 +678,7 @@ class LinearRegression(analysis.Analysis):
         '''
         return  self.intercept
 
-    def initialize(self, ind_vars, dep_var, slope, intercept, p = 1):
+    def initialize(self, ind_vars, dep_var, slope, intercept, p = 1, use_gpu = False):
         '''Sets fields based on parameter values.
         (Week 2)
 
