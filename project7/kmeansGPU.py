@@ -432,7 +432,11 @@ class KMeansGPU():
                                                                  prev_centroids=self.centroids,distance_calc_method = distance_calc_method)
             self.centroids = new_centroids
 
-            max_centroid_diff = self.xp.max(self.xp.sum(centroid_diff,axis=1))
+            #check that centroids are more than 1 feature
+            if centroid_diff.size == self.k:
+                max_centroid_diff = self.xp.max(centroid_diff)
+            else:
+                max_centroid_diff = self.xp.max(self.xp.sum(centroid_diff,axis=1))
 
             # increment i
             i += 1
@@ -492,6 +496,11 @@ class KMeansGPU():
         '''
         data_distance_from_centroids = []
         centroids = self.checkArrayType(centroids)
+
+        #make sure cntroids is 2 dimensions
+        # if centroids.shape[1] == 1:
+        #     centroids = centroids[None,:]
+
         if multiProcess:
             pass
         else:
@@ -500,8 +509,13 @@ class KMeansGPU():
             # https://www.robots.ox.ac.uk/~albanie/notes/Euclidean_distance_trick.pdf
             # and https://medium.com/@souravdey/l2-distance-matrix-vectorization-trick-26aa3247ac6c
             if distance_calc_method == 'L2':
+
+
                 if self.xp == np:
-                    data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[:, None] + (centroids * centroids).sum(axis=-1)[None]
+                    if centroids.size == self.k:
+                        data_distance_from_centroids = self.xp.sqrt((self.data - centroids.T)*(self.data - centroids.T))
+                    else:
+                        data_distance_from_centroids = -2 * self.data @ centroids.T + (self.data * self.data).sum(axis=-1)[:, None] + (centroids * centroids).sum(axis=-1)[None]
                     data_distance_from_centroids = np.sqrt(np.abs(data_distance_from_centroids))
 
                 #else if it is Cupy Gpu bases
@@ -601,7 +615,7 @@ class KMeansGPU():
 
             return new_centroids, centroid_diff
 
-    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False):
+    def compute_inertia(self ,distance_calc_method = 'L2',get_mean_dist_per_centroid = False,calc_dist_again = True):
         '''Mean squared distance between every data sample and its assigned (nearest) centroid
 
         Parameters:
@@ -612,68 +626,82 @@ class KMeansGPU():
         -----------
         float. The average squared distance between every data sample and its assigned cluster centroid.
         '''
-
-        centroid_mean_dist_array = self.xp.zeros(len(self.centroids))
-        centroid_mean_squared_dist_array= self.xp.zeros(len(self.centroids))
-
-        centroid_mean_squared_dist_list = []
-        for index, centroid in enumerate(self.centroids):
-            if distance_calc_method == 'L2':
+        # if isinstance(self.data_dist_from_centroid, type(None)):
+        if calc_dist_again:
 
 
 
-                data_in_centroid = self.data[self.data_centroid_labels == index]
 
 
-                centroid_square_dist_part_1 = (data_in_centroid - centroid) * (data_in_centroid - centroid)
-                if centroid_square_dist_part_1.shape[0] == 1:
-                    centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1)
-                else:
-                    centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1, axis=1)
+            #commented out code trying to make cleaner
+            centroid_mean_dist_array = self.xp.zeros(len(self.centroids))
+            centroid_mean_squared_dist_array= self.xp.zeros(len(self.centroids))
 
-                if get_mean_dist_per_centroid:
-                    centroid_dist_array = self.xp.sqrt(centroid_square_dist_array)
+            centroid_mean_squared_dist_list = []
+            for index, centroid in enumerate(self.centroids):
+                if distance_calc_method == 'L2':
 
-                    #if there is only one centroid witht he distance
+
+
+                    data_in_centroid = self.data[self.data_centroid_labels == index]
+
+
+                    centroid_square_dist_part_1 = (data_in_centroid - centroid) * (data_in_centroid - centroid)
                     if centroid_square_dist_part_1.shape[0] == 1:
-                        centroid_mean_dist = centroid_dist_array
+                        centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1)
                     else:
-                        centroid_mean_dist = self.xp.mean(centroid_dist_array)
+                        centroid_square_dist_array = self.xp.sum(centroid_square_dist_part_1, axis=1)
 
-                    centroid_mean_dist_array[index] = centroid_mean_dist
+                    if get_mean_dist_per_centroid:
+                        centroid_dist_array = self.xp.sqrt(centroid_square_dist_array)
 
-                if centroid_square_dist_array.size == 1:
-                    centroid_mean_squared = centroid_square_dist_array.max()
-                else:
-                    centroid_mean_squared = self.xp.mean(centroid_square_dist_array)
+                        #if there is only one centroid witht he distance
+                        if centroid_square_dist_part_1.shape[0] == 1:
+                            centroid_mean_dist = centroid_dist_array
+                        else:
+                            centroid_mean_dist = self.xp.mean(centroid_dist_array)
 
+                        centroid_mean_dist_array[index] = centroid_mean_dist
 
-            #TODO fix calculation for squared dist not normal dist
-            elif distance_calc_method == 'L1':
-                data_in_centroid = self.data[np.where(self.data_centroid_labels == index),:]
-                if data_in_centroid.size == 0:
-                    centroid_mean = 0
-                else:
-                    data_in_centroid = data_in_centroid.reshape(int(data_in_centroid.size/self.num_features),self.num_features)
-                    if data_in_centroid.size > self.num_features:
-                        centroid_mean_squared = np.apply_along_axis(func1d = self.dist_pt_to_pt
-                                                    ,axis=1, arr=data_in_centroid,
-                                                    pt_2=centroid, method=distance_calc_method)
+                    if centroid_square_dist_array.size == 1:
+                        centroid_mean_squared = centroid_square_dist_array.max()
                     else:
-                        centroid_mean_squared = np.array(self.dist_pt_to_pt(data_in_centroid,centroid,distance_calc_method))
-
-            centroid_mean_squared_dist_array[index] = centroid_mean_squared
+                        centroid_mean_squared = self.xp.mean(centroid_square_dist_array)
 
 
-        #TODO maybe add option for kernal use
-        sum_of_dists = self.xp.sum(self.xp.array(centroid_mean_squared_dist_array))
-        intertia = sum_of_dists/centroid_mean_squared_dist_array.size
+                #TODO fix calculation for squared dist not normal dist
+                elif distance_calc_method == 'L1':
+                    data_in_centroid = self.data[np.where(self.data_centroid_labels == index),:]
+                    if data_in_centroid.size == 0:
+                        centroid_mean = 0
+                    else:
+                        data_in_centroid = data_in_centroid.reshape(int(data_in_centroid.size/self.num_features),self.num_features)
+                        if data_in_centroid.size > self.num_features:
+                            centroid_mean_squared = np.apply_along_axis(func1d = self.dist_pt_to_pt
+                                                        ,axis=1, arr=data_in_centroid,
+                                                        pt_2=centroid, method=distance_calc_method)
+                        else:
+                            centroid_mean_squared = np.array(self.dist_pt_to_pt(data_in_centroid,centroid,distance_calc_method))
 
-        if get_mean_dist_per_centroid:
+                centroid_mean_squared_dist_array[index] = centroid_mean_squared
 
-            return intertia, centroid_mean_dist_array
-        else:
-            return intertia
+
+            #TODO maybe add option for kernal use
+            sum_of_dists = self.xp.sum(self.xp.array(centroid_mean_squared_dist_array))
+            intertia = sum_of_dists/centroid_mean_squared_dist_array.size
+
+            if get_mean_dist_per_centroid:
+
+                return intertia, centroid_mean_dist_array
+            else:
+                return intertia
+
+
+
+
+
+
+
 
         # if self.xp == cp:
         #
@@ -686,6 +714,45 @@ class KMeansGPU():
         #     return intertia, centroid_mean_dist_array
         # else:
         #     return intertia
+
+        #if the k means obj has been used atleast once
+        else:
+            # data_dist_from_centroids_squared = self.data_dist_from_centroid**2
+
+            intertia = self.xp.mean(self.data_dist_from_centroid)
+
+
+            if get_mean_dist_per_centroid:
+                num_classes_array = self.xp.arange(self.k)
+                label_one_hot = self.data_centroid_labels == num_classes_array[:, None]
+
+                # make booleans 0s and 1s to be multiplied
+                label_one_hot = label_one_hot.astype('int')
+
+                # sum_mask = label_one_hot[:, None, :]
+                if self.use_gpu:
+                    #TODO add kernal operators
+
+                    # grouped_data = label_one_hot * data_dist_from_centroids_squared[:, None].T
+                    grouped_data = self.data_dist_from_centroid * label_one_hot
+                    sum_grouped_data = grouped_data.sum(axis=1)
+                    group_samp_counts = label_one_hot.sum(axis=1)
+
+                    centroid_means = sum_grouped_data / group_samp_counts
+                    return intertia, centroid_means
+                else:
+
+
+
+                    # grouped_data = label_one_hot * data_dist_from_centroids_squared[:, None].T
+                    grouped_data = self.data_dist_from_centroid * label_one_hot
+                    sum_grouped_data = grouped_data.sum(axis=1)
+                    group_samp_counts = label_one_hot.sum(axis=1)
+
+                    centroid_means = sum_grouped_data/group_samp_counts
+                    return intertia, centroid_means
+            return intertia
+
 
     def plot_clusters(self, cmap = palettable.colorbrewer.qualitative.Paired_12.mpl_colormap, title = '' ,x_axis = 0, y_axis = 1, fig_sz = (8,8), legend_font_size = 10):
 

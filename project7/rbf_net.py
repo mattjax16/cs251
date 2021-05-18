@@ -196,7 +196,7 @@ class RBF_Net:
         '''
         return self.num_output_units
 
-    def avg_cluster_dist(self, data, centroids, cluster_assignments, kmeans_obj, debug = False):
+    def avg_cluster_dist(self, data, centroids, cluster_assignments, kmeans_obj, debug = False,square_output = False):
         '''Compute the average distance between each cluster center and data points that are
         assigned to it.
 
@@ -227,9 +227,12 @@ class RBF_Net:
         kmeans_obj.data_centroid_labels = cluster_assignments
 
         avg_cluster_dist = kmeans_obj.compute_inertia(get_mean_dist_per_centroid=True)[1]
+        if square_output:
+            avg_cluster_dist = avg_cluster_dist*avg_cluster_dist
+
         return avg_cluster_dist
 
-    def initialize(self, data, n_iter=10,  tol=1e-2, max_iter=100, init_method = '++',distance_calc_method = 'L2',debug = False,):
+    def initialize(self, data, n_iter=10,  tol=1e-2, max_iter=100, init_method = 'points',distance_calc_method = 'L2',debug = False,):
         '''Initialize hidden unit centers using K-means clustering and initialize sigmas using the
         average distance within each cluster
 
@@ -260,8 +263,12 @@ class RBF_Net:
                                  init_method=init_method,distance_calc_method=distance_calc_method)
 
         self.prototypes = kmeans_obj.get_centroids()
-        comput_res = kmeans_obj.compute_inertia(get_mean_dist_per_centroid=True)
-        self.sigmas = comput_res[1]
+        labels_from_clustering = kmeans_obj.get_data_centroid_labels()
+
+
+        #TODO NOt sure which one
+        self.sigmas = self.avg_cluster_dist(data,self.prototypes,labels_from_clustering,kmeans_obj)
+
 
         if debug:
             print(f'It Took {start_time - time.time()} to run initialize()')
@@ -343,15 +350,16 @@ class RBF_Net:
         data_matrix = data[:,None,:]
         prototypes_matrix = prototypes[None,:,:]
 
-        dist_matrix = data_matrix - prototypes_matrix
-        dist_matrix = dist_matrix * dist_matrix
-        dist_matrix = dist_matrix.sum(axis=2)
+        dist_matrix = self.xp.sum(((data_matrix - prototypes_matrix)*(data_matrix - prototypes_matrix)),axis = 2)
+        # dist_matrix = dist_matrix * dist_matrix
+        # dist_matrix = dist_matrix.sum(axis=2)
 
-        sigmas_squared = sigmas * sigmas
-        sigmas_squared = sigmas_squared*2
-        sigmas_squared = sigmas_squared + epsilon
+        # dist_matrix = data_matrix - prototypes_matrix
+        # dist_matrix = dist_matrix * dist_matrix
+        # dist_matrix = dist_matrix.sum(axis=2)
 
-        hidden_acts = self.xp.exp(-(dist_matrix/sigmas_squared))
+
+        hidden_acts = self.xp.exp(-dist_matrix/((sigmas * sigmas)*(2)+ epsilon))
 
         if debug:
             print(f'It Took {start_time - time.time()} to run hidden_act()')
@@ -396,7 +404,7 @@ class RBF_Net:
         if debug:
             print(f'It Took {start_time - time.time()} to run output_act()')
         return output_activation1
-    def train(self, data, y, debug = False, use_svd = True):
+    def train(self, data, y, debug = False, use_svd = True,n_iter=10,  tol=1e-2, max_iter=100, init_method = 'points',distance_calc_method = 'L2'):
         '''Train the radial basis function network
 
         Parameters:
@@ -423,8 +431,8 @@ class RBF_Net:
         data = self.checkArrayType(data)
         y = self.checkArrayType(y)
 
-        # initilize
-        self.initialize(data)
+        ## initilize
+        self.initialize(data,n_iter,tol,max_iter,init_method,distance_calc_method,debug)
 
         #get all unique labels for y (output categories)
         unique_y = self.xp.unique(y)
@@ -535,7 +543,7 @@ class RBF_Net:
 class RBF_Reg_Net(RBF_Net):
     '''RBF Neural Network configured to perform regression
     '''
-    def __init__(self, num_hidden_units, num_classes, h_sigma_gain=5):
+    def __init__(self, num_hidden_units, num_classes, use_gpu = False, h_sigma_gain=5):
         '''RBF regression network constructor
 
         Parameters:
@@ -548,7 +556,7 @@ class RBF_Reg_Net(RBF_Net):
         TODO:
         - Create an instance variable for the hidden unit variance gain
         '''
-        super().__init__(num_hidden_units, num_classes)
+        super().__init__(num_hidden_units, num_classes,use_gpu)
 
         self.h_sigma_gain = h_sigma_gain
 
@@ -579,27 +587,28 @@ class RBF_Reg_Net(RBF_Net):
         prototypes = self.checkArrayType(self.prototypes)
         sigmas = self.checkArrayType(self.sigmas)
 
-        data_matrix = data[:,None,:]
-        prototypes_matrix = prototypes[None,:,:]
+        #check if there is just one feature or not
+        if prototypes.size == self.k:
+            dist_matrix = (data - prototypes.T)*(data - prototypes.T)
+        else:
+            data_matrix = data[:,None,:]
+            prototypes_matrix = prototypes[None,:,:]
 
-        dist_matrix = data_matrix - prototypes_matrix
-        dist_matrix = dist_matrix * dist_matrix
-        dist_matrix = dist_matrix.sum(axis=2)
+            dist_matrix = data_matrix - prototypes_matrix
+            dist_matrix = dist_matrix * dist_matrix
+            dist_matrix = dist_matrix.sum(axis=2)
 
-        sigmas_squared = sigmas * sigmas
-        sigmas_squared = sigmas_squared*2
-        sigmas_squared = sigmas_squared + epsilon
 
-        hidden_acts = self.xp.exp(-(dist_matrix/sigmas_squared))
+        hidden_acts = self.xp.exp(-dist_matrix/((sigmas * sigmas)*(2*self.h_sigma_gain)+ epsilon))
 
-        if debug:
-            print(f'It Took {start_time - time.time()} to run hidden_act()')
-        return hidden_acts
+
 
         if debug:
             print(f'It Took {start_time - time.time()} to run Reg_Net hidden_act()')
 
-    def train(self, data, y, debug = False):
+        return hidden_acts
+
+    def train(self, data, y, debug = False, use_svd = True,n_iter=10,  tol=1e-2, max_iter=100, init_method = 'points',distance_calc_method = 'L2'):
         '''Train the radial basis function network
 
         Parameters:
@@ -622,11 +631,37 @@ class RBF_Reg_Net(RBF_Net):
         simpler than before.
         - You may need to squeeze the output of your linear regression method if you get shape errors.
         '''
+
         if debug:
             start_time = time.time()
 
+        # check input sfor propper data array types
+        data = self.checkArrayType(data)
+        y = self.checkArrayType(y)
+
+        # initilize
+        self.initialize(data,n_iter,tol,max_iter,init_method,distance_calc_method,debug)
+
+        hidden_acts = self.hidden_act(data)
+
+        if self.use_gpu:
+            hidden_acts = cp.nan_to_num(hidden_acts)
+
+        hidden_acts_ones = self.xp.hstack((hidden_acts, self.xp.ones((hidden_acts.shape[0], 1))))
+
+        # see whether to use svd to speed up regression calculations or not
+        if use_svd:
+            hidden_acts_p_inv = self.get_p_inv(hidden_acts_ones.T @ hidden_acts_ones)
+            weights = hidden_acts_p_inv @ hidden_acts_ones.T @ y
+            # weights = self.xp.abs(weights)
+
+
+
         if debug:
             print(f'It Took {start_time - time.time()} to run Reg_Net train()')
+
+        # set the weights
+        self.wts = weights
 
     def predict(self, data, debug = False):
         '''Classify each sample in `data`
@@ -648,8 +683,18 @@ class RBF_Reg_Net(RBF_Net):
         if debug:
             start_time = time.time()
 
+        # check input sfor propper data array types
+        data = self.checkArrayType(data)
+
+        # get hidden activations of hidden data
+        test_hidden_acts = self.hidden_act(data)
+
+        predictions = self.output_act(test_hidden_acts)
+
 
 
 
         if debug:
             print(f'It Took {start_time - time.time()} to run Reg_Net predict()')
+
+        return predictions
