@@ -51,6 +51,12 @@ class LinearRegression(analysis.Analysis):
         # R2: float. R^2 statistic
         self.R2 = None
 
+        # adjusted R2 to take into account that adding more vars gennerally leads to a better fit
+        # (helps prevent overfitting in a way)
+        self.adj_R2 = None
+
+
+
         # Mean SEE. float. Measure of quality of fit
         self.m_sse = None
 
@@ -198,6 +204,13 @@ class LinearRegression(analysis.Analysis):
         self.predicted_y = self.predict()
         self.residuals = self.compute_residuals(self.predicted_y)
         self.R2 = self.r_squared(self.predicted_y)
+        # # calculate adjusted R2
+        self.n = 10 # number of samps
+
+        self.k = self.slope.size  # number of vars added to the model
+        self.adj_R2 = 1 - ((1 - self.R2) * (self.n - 1) / (self.n - self.k - 1))
+
+
         self.m_sse = self.mean_sse()
 
 
@@ -364,7 +377,7 @@ class LinearRegression(analysis.Analysis):
             y_pred = np.array(self.intercept + np.sum((X*np.array(self.slope).T),1))[:,np.newaxis]
             return y_pred
 
-    def r_squared(self, y_pred):
+    def other_way_R2(self, y_pred):
         '''Computes the R^2 quality of fit statistic
 
         Parameters:
@@ -377,15 +390,44 @@ class LinearRegression(analysis.Analysis):
         R2: float.
             The R^2 statistic
         '''
+
+        #y-ypred
         y_mean = np.mean(self.actual_y)
         r2_bottom = np.sum((self.actual_y - y_mean) ** 2)
-        r2_top = np.sum((self.predicted_y - y_mean)**2)
+        r2_top = np.sum((y_pred - y_mean)**2)
         R2 = (r2_top/r2_bottom)
+        return R2
+
+
+    def r_squared(self, y_pred):
+        '''Computes the R^2 quality of fit statistic
+
+        with the 1-(sum squared error/ variance of y)
+
+        Parameters:
+        -----------
+        y_pred: ndarray. shape=(num_data_samps,).
+            Dependent variable values predicted by the linear regression model
+
+        Returns:
+        -----------
+        R2: float.
+            The R^2 statistic
+        '''
+
+        #get risiduals from y_pred
+        sum_squared_error =np.sum((self.compute_residuals(y_pred))**2)
+        y_mean = np.mean(self.actual_y)
+        y_var = np.sum((self.actual_y - y_mean)**2)
+
+        part_1 = (sum_squared_error/y_var)
+
+        R2 = 1 - (sum_squared_error/y_var)
         return R2
 
     def compute_residuals(self, y_pred):
 
-        #why not make self. here
+
         '''Determines the residual values from the linear regression model
 
         Parameters:
@@ -455,6 +497,30 @@ class LinearRegression(analysis.Analysis):
 
         plt.legend(bbox_to_anchor=(1.26, 0.1), loc='upper right')
 
+    def get_regression_cords(self, ind_var, dep_var):
+        '''Gets the cordinates to plot a regression line from the regression
+
+        Parameters:
+        -----------
+        ind_var: string. Independent variable name
+        dep_var: string. Dependent variable name
+
+
+        '''
+        var_array = self.data.select_data([ind_var, dep_var])
+        x_cords = var_array[:, 0]
+        y_cordsy = var_array[:, 1]
+
+        x_linreg_plot_cords = np.linspace(np.min(x_cords), np.max(x_cords))
+        if self.p == 1:
+            y_linreg_plot_cords = self.intercept + self.slope[self.ind_vars.index(ind_var)] * x_linreg_plot_cords
+        elif self.p > 1:
+            x_linreg_A = x_linreg_plot_cords[:, np.newaxis]
+            x_linreg_A = self.make_polynomial_matrix(x_linreg_A, self.p)
+            y_linreg_plot_cords = np.array(self.intercept + np.sum((x_linreg_A * np.array(self.slope).T), 1))[:,
+                                  np.newaxis]
+
+        return (x_linreg_plot_cords,y_linreg_plot_cords)
 
 
     # helper function for pair_plot to create linear regressions
@@ -639,3 +705,11 @@ class LinearRegression(analysis.Analysis):
         #fit the data
         self.linear_regression(ind_vars=ind_vars,dep_var=dep_var,
                                p = p, slope=slope,intercept=intercept)
+
+
+
+    #getters
+    def get_adj_R2(self):
+        #gets adjusted r2
+        return self.adj_R2
+
